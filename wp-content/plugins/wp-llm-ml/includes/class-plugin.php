@@ -74,6 +74,7 @@ final class Plugin {
 		( new Seo( $this->router, $this->switcher ) )->boot();
 		( new Rest( $this->router ) )->boot();
 		( new Abilities() )->boot();
+		( new Updater() )->boot();
 
 		( new Integrations\Elementor() )->boot();
 		( new Integrations\Generatepress( $this->router, $this->links ) )->boot();

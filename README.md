@@ -4,9 +4,10 @@ Een lichte, volledig gratis meertaligheidsplugin voor WordPress, gebouwd voor
 [thelibrarywithin.com](https://thelibrarywithin.com/) (GeneratePress + GP Premium,
 Elementor free, Yoast SEO, MailPoet, Forminator), maar bruikbaar op elke site.
 
-**Geen premiumversie, geen upsells, geen nag-schermen, geen tracking, geen
-externe verbindingen.** De enige uitzondering is optionele AI-vertaling, en die
-gebruikt alleen de AI-dienst die je zelf instelt, en alleen wanneer je op een knop klikt.
+**Geen premiumversie, geen upsells, geen nag-schermen, geen tracking.** Externe
+verbindingen zijn er maar twee: een anonieme update-check bij GitHub (max. twee keer
+per dag, uit te zetten) en — alleen als je op een AI-knop klikt — de AI-dienst die je
+zelf instelt.
 
 ## Wat het doet
 
@@ -27,9 +28,10 @@ gebruikt alleen de AI-dienst die je zelf instelt, en alleen wanneer je op een kn
 
 ## Installeren
 
-1. Bouw de zip: `bin/build-zip.sh` → `dist/wp-llm-ml.zip`
-   (of zip de map `wp-content/plugins/wp-llm-ml`).
-2. WordPress → Plugins → Nieuwe plugin → Plugin uploaden → activeren.
+1. Download **`wp-llm-ml.zip`** van de laatste
+   [release](https://github.com/brnl-claude/wp-llm-ml/releases/latest) (onder *Assets*; niet uitpakken).
+2. WordPress → **Plugins → Nieuwe plugin → Plugin uploaden** → zip kiezen → **Nu installeren** → **Activeren**.
+   Doe dit eerst op een testsite/staging.
 3. **Instellingen → Languages**:
    - Voeg *Nederlands* en *Română* toe (Engels blijft standaard).
    - Klik **Install language packs** (vertaalt knoppen, datums, formulier-meldingen).
@@ -40,7 +42,14 @@ gebruikt alleen de AI-dienst die je zelf instelt, en alleen wanneer je op een kn
    define( 'WPLLMML_AI_API_KEY', 'hyai-rt-…' );
    ```
    Endpoint HostYourAI: `https://hostyourai.com/api/v1` (OpenAI-compatibel, Bearer-key).
-   Zet bij *Instructions for translations* je huisstijl, bijv. "Spreek de lezer aan met je/jij; laat Gestalt en Reiki onvertaald; toon warm en rustig".
+   Zet bij *Instructions for translations* je huisstijl, bijv. "Spreek de lezer aan met je/jij; laat Gestalt en Reiki onvertaald; toon warm en rustig; gebruik in het Roemeens ș en ț (met komma)".
+
+### Updates
+
+Nieuwe releases verschijnen vanzelf onder **Dashboard → Updates** (de plugin vraagt via
+WordPress' eigen `Update URI`-mechanisme de laatste GitHub-release op). Handmatig kan ook:
+nieuwe zip uploaden en "Huidige vervangen" kiezen. Update-check uitzetten:
+`define( 'WPLLMML_DISABLE_UPDATES', true );` in `wp-config.php`.
 
 ## Vertaalworkflow met Elementor
 
@@ -60,11 +69,28 @@ gebruikt alleen de AI-dienst die je zelf instelt, en alleen wanneer je op een kn
 
 ```bash
 tests/run.sh            # bouwt een wegwerp-WordPress (SQLite) met GeneratePress, Elementor en Yoast
+tests/package.sh        # bouwt de zip, installeert hem in een verse site en test een update via een (nep)release
+bin/build-zip.sh        # alleen de zip bouwen → dist/wp-llm-ml.zip
 ```
 
-Drie suites (135 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
+GitHub Actions draait beide bij elke push (*Tests*; de zip staat dan als artifact bij de run).
+
+### Nieuwe versie uitbrengen
+
+```bash
+bin/version.sh set 0.2.0          # zet versie in plugin-header, constante en readme.txt
+# vul de changelog in wp-content/plugins/wp-llm-ml/readme.txt aan, commit
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+De workflow *Release* controleert dat tag en versie gelijk zijn, draait alle tests,
+bouwt `wp-llm-ml.zip` en publiceert de GitHub Release. Sites met de plugin zien de update
+daarna in hun dashboard.
+
+Vier suites (153 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
 queries), HTTP (routing, redirects, hreflang, menu's, switcher, links, lijsten, REST, sitemaps) en
-AI (tegen een nep-OpenAI-server: Elementor-teksten, repeaters, Yoast-velden, spellingscontrole, Abilities).
+AI (tegen een nep-OpenAI-server: Elementor-teksten, repeaters, Yoast-velden, spellingscontrole, Abilities)
+en package (zip installeren in een verse site, activeren, updaten via de WordPress-upgrader).
 Testversies: WordPress 7.1.4, Elementor 4.2.2, Yoast SEO 28.2, GeneratePress 3.6.1, PHP 8.3.
 
 ### Opbouw
@@ -86,6 +112,9 @@ wp-content/plugins/wp-llm-ml/
   includes/integrations/        Elementor, GeneratePress, Yoast
   includes/ai/                  OpenAI-compatibele client, vertaler, spellingscontrole
   includes/admin/               instellingen, kolommen, metabox, adminbalk
+  includes/class-updater.php    updates via GitHub Releases
+.github/workflows/              Tests (elke push) en Release (bij tag v*)
+bin/                            build-zip, version, release-notes
 ```
 
 Licentie: GPL-2.0-or-later.

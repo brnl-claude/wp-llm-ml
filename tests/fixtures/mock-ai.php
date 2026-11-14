@@ -8,6 +8,8 @@
  *   "<CODE>:" (code taken from the system prompt); spell check: one finding
  *   for the word "Welcom" when present.
  * Requires "Authorization: Bearer test-key".
+ * Also fakes GitHub's "latest release" API (/github/releases/latest) and
+ * serves the zip named in WPLLMML_MOCK_ZIP, for the updater test.
  *
  * @package WPLLMML
  */
@@ -19,6 +21,29 @@ $reply  = static function ( $code, $data ) {
 	header( 'Content-Type: application/json' );
 	echo json_encode( $data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
 };
+// Fake GitHub release API for the updater test (no auth, like GitHub's public API).
+if ( '/github/releases/latest' === $path ) {
+	$version = getenv( 'WPLLMML_MOCK_VERSION' ) ? getenv( 'WPLLMML_MOCK_VERSION' ) : '9.9.9';
+	$reply(
+		200,
+		array(
+			'tag_name'     => 'v' . $version,
+			'html_url'     => 'https://github.com/brnl-claude/wp-llm-ml/releases/tag/v' . $version,
+			'body'         => "Test release\n- something new",
+			'published_at' => '2026-11-14T12:00:00Z',
+			'assets'       => array(
+				array( 'name' => 'notes.txt', 'browser_download_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/github/notes.txt' ),
+				array( 'name' => 'wp-llm-ml.zip', 'browser_download_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/github/wp-llm-ml.zip' ),
+			),
+		)
+	);
+	return;
+}
+if ( '/github/wp-llm-ml.zip' === $path && getenv( 'WPLLMML_MOCK_ZIP' ) && is_file( getenv( 'WPLLMML_MOCK_ZIP' ) ) ) {
+	header( 'Content-Type: application/zip' );
+	readfile( getenv( 'WPLLMML_MOCK_ZIP' ) );
+	return;
+}
 if ( 'Bearer test-key' !== $auth ) {
 	$reply( 401, array( 'error' => array( 'message' => 'Invalid API key' ) ) );
 	return;

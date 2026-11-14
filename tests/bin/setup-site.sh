@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Builds a disposable WordPress test site (SQLite, no MySQL needed) with the
 # same stack as thelibrarywithin.com: GeneratePress, Elementor, Yoast SEO,
-# plus this plugin (symlinked), then seeds sample content.
+# plus this plugin (symlinked, unless PLUGIN_ZIP is set), then seeds sample
+# content.
 #
 # Usage: tests/bin/setup-site.sh <target-dir> [port]
 # Then:  php -S localhost:<port> -t <target-dir>/site tests/bin/router.php
@@ -30,7 +31,11 @@ rm -rf site
 unzip -q dl/wordpress.zip && mv wordpress site
 ( cd site/wp-content/plugins && unzip -q ../../../dl/sqlite.zip && unzip -q ../../../dl/elementor.zip && unzip -q ../../../dl/yoast.zip )
 ( cd site/wp-content/themes && unzip -q ../../../dl/generatepress.zip )
-ln -sfn "$REPO/wp-content/plugins/wp-llm-ml" site/wp-content/plugins/wp-llm-ml
+# Development: symlink the plugin. Package test (PLUGIN_ZIP set): leave it
+# out, the test installs it from the zip like a site owner would.
+if [ -z "${PLUGIN_ZIP:-}" ]; then
+	ln -sfn "$REPO/wp-content/plugins/wp-llm-ml" site/wp-content/plugins/wp-llm-ml
+fi
 
 SITE="$TARGET/site"
 sed -e "s#{SQLITE_IMPLEMENTATION_FOLDER_PATH}#$SITE/wp-content/plugins/sqlite-database-integration#" \

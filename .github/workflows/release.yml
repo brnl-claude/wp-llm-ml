@@ -1,0 +1,44 @@
+name: Release
+
+# Push a tag like v0.2.0 (after `bin/version.sh set 0.2.0` and a commit) to
+# test, build and publish wp-llm-ml.zip as a GitHub Release. Sites with the
+# plugin installed then see the update under Dashboard → Updates.
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, sqlite3, curl, zip, mbstring, intl
+          coverage: none
+
+      - name: Tag matches plugin version
+        run: bin/version.sh check "${GITHUB_REF_NAME#v}"
+
+      - name: Integration tests
+        run: tests/run.sh "$RUNNER_TEMP/wpllmml"
+
+      - name: Package test (builds dist/wp-llm-ml.zip)
+        run: tests/package.sh "$RUNNER_TEMP/wpllmml-package"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          bin/release-notes.sh "$VERSION" > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" dist/wp-llm-ml.zip \
+            --title "LLM Multilingual $VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            --verify-tag

@@ -23,6 +23,9 @@ switch_theme( 'generatepress' );
 update_option( 'permalink_structure', '/%postname%/' );
 update_option( 'blogdescription', 'Therapy - Counselling - Coaching' );
 foreach ( array( 'elementor/elementor.php', 'wordpress-seo/wp-seo.php', 'wp-llm-ml/wp-llm-ml.php' ) as $plugin ) {
+	if ( ! is_file( WP_PLUGIN_DIR . '/' . $plugin ) ) {
+		continue; // Package test: installed later from the zip.
+	}
 	$result = activate_plugin( $plugin, '', false, true );
 	if ( is_wp_error( $result ) ) {
 		echo 'Activation failed: ' . $plugin . ' ' . $result->get_error_message() . "\n";
@@ -276,15 +279,24 @@ $sidebars['footer-bar'] = array( 'block-33' );
 update_option( 'sidebars_widgets', $sidebars );
 
 // Plugin: English (default), Dutch, Romanian; switcher in the primary menu.
-$settings                  = WPLLMML\Settings::all();
-$settings['languages']     = array(
-	array( 'code' => 'en', 'locale' => 'en_US', 'name' => 'English' ),
-	array( 'code' => 'nl', 'locale' => 'nl_NL', 'name' => 'Nederlands' ),
-	array( 'code' => 'ro', 'locale' => 'ro_RO', 'name' => 'Română' ),
-);
-$settings['default']       = 'en';
-$settings['menu_location'] = 'primary';
-WPLLMML\Settings::save( $settings );
+if ( class_exists( 'WPLLMML\\Settings' ) ) {
+	wpllmml_seed_settings();
+}
+
+/**
+ * Plugin settings used by the tests.
+ */
+function wpllmml_seed_settings() {
+	$settings                  = WPLLMML\Settings::all();
+	$settings['languages']     = array(
+		array( 'code' => 'en', 'locale' => 'en_US', 'name' => 'English' ),
+		array( 'code' => 'nl', 'locale' => 'nl_NL', 'name' => 'Nederlands' ),
+		array( 'code' => 'ro', 'locale' => 'ro_RO', 'name' => 'Română' ),
+	);
+	$settings['default']       = 'en';
+	$settings['menu_location'] = 'primary';
+	WPLLMML\Settings::save( $settings );
+}
 
 flush_rewrite_rules();
 echo 'Seeded pages: ' . wp_json_encode( $pages ) . "\n";

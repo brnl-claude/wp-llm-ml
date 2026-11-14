@@ -11,6 +11,7 @@
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       wp-llm-ml
  * Domain Path:       /languages
+ * Update URI:        https://github.com/brnl-claude/wp-llm-ml
  *
  * @package WPLLMML
  */

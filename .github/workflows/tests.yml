@@ -1,0 +1,42 @@
+name: Tests
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, sqlite3, curl, zip, mbstring, intl
+          coverage: none
+
+      - name: PHP syntax (PHP 7.4 compatible code, linted on 8.3)
+        run: find wp-content/plugins/wp-llm-ml -name '*.php' -print0 | xargs -0 -n1 php -l > /dev/null
+
+      - name: Version numbers agree
+        run: bin/version.sh
+
+      - name: Integration tests (WordPress + GeneratePress + Elementor + Yoast)
+        run: tests/run.sh "$RUNNER_TEMP/wpllmml"
+
+      - name: Package test (install from zip, update from release)
+        run: tests/package.sh "$RUNNER_TEMP/wpllmml-package"
+
+      - name: Upload plugin zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: wp-llm-ml-zip
+          path: dist/wp-llm-ml.zip
+          retention-days: 14

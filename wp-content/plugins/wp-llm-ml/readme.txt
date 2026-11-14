@@ -35,6 +35,10 @@ Lightweight multilingual plugin without upsells, nags or tracking. Elementor and
 
 One functional cookie, wpllmml_lang, stores the language a visitor chose so they are not redirected again. No tracking.
 
+= Does it contact external services? =
+
+Only to check GitHub for new releases (anonymous request to api.github.com, at most twice a day; disable with define( 'WPLLMML_DISABLE_UPDATES', true );) and, when you click a translate or spell-check button, the AI provider you configured.
+
 = Does it work with page caching? =
 
 Yes. The language is part of the URL and browser detection runs in the browser.
@@ -42,4 +46,6 @@ Yes. The language is part of the URL and browser detection runs in the browser.
 == Changelog ==
 
 = 0.1.0 =
-* First release.
+* First release: languages with /xx/ URL prefixes, Elementor-safe translations, browser language detection, language switcher (menu, Elementor widget, widget, shortcode), hreflang/Yoast integration, string and widget translations, REST API and Abilities.
+* Optional AI translation and spell checking through an OpenAI-compatible API (default: HostYourAI).
+* Updates from GitHub Releases appear under Dashboard → Updates.
