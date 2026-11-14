@@ -1,14 +1,23 @@
 name: Release
 
-# Push a tag like v0.2.0 (after `bin/version.sh set 0.2.0` and a commit) to
-# test, build and publish wp-llm-ml.zip as a GitHub Release. Sites with the
-# plugin installed then see the update under Dashboard → Updates.
+# Two ways to publish a version (after `bin/version.sh set X.Y.Z` + commit):
+#  1. GitHub → Releases → "Draft a new release" → new tag vX.Y.Z on the branch
+#     → Publish. This workflow then tests, builds and attaches wp-llm-ml.zip
+#     (and fills in the notes when the description was left empty).
+#  2. git tag vX.Y.Z && git push origin vX.Y.Z — the release is created here.
+# Sites with the plugin installed then see the update under Dashboard → Updates.
 on:
   push:
     tags: ['v*.*.*']
+  release:
+    types: [published]
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -32,13 +41,21 @@ jobs:
       - name: Package test (builds dist/wp-llm-ml.zip)
         run: tests/package.sh "$RUNNER_TEMP/wpllmml-package"
 
-      - name: Publish release
+      - name: Publish release with the plugin zip
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          TAG="$GITHUB_REF_NAME"
+          VERSION="${TAG#v}"
           bin/release-notes.sh "$VERSION" > "$RUNNER_TEMP/notes.md"
-          gh release create "$GITHUB_REF_NAME" dist/wp-llm-ml.zip \
-            --title "LLM Multilingual $VERSION" \
-            --notes-file "$RUNNER_TEMP/notes.md" \
-            --verify-tag
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" dist/wp-llm-ml.zip --clobber
+            if [ -z "$(gh release view "$TAG" --json body --jq .body)" ]; then
+              gh release edit "$TAG" --notes-file "$RUNNER_TEMP/notes.md" --title "LLM Multilingual $VERSION"
+            fi
+          else
+            gh release create "$TAG" dist/wp-llm-ml.zip \
+              --title "LLM Multilingual $VERSION" \
+              --notes-file "$RUNNER_TEMP/notes.md" \
+              --verify-tag
+          fi

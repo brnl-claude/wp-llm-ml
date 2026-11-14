@@ -77,15 +77,14 @@ GitHub Actions draait beide bij elke push (*Tests*; de zip staat dan als artifac
 
 ### Nieuwe versie uitbrengen
 
-```bash
-bin/version.sh set 0.2.0          # zet versie in plugin-header, constante en readme.txt
-# vul de changelog in wp-content/plugins/wp-llm-ml/readme.txt aan, commit
-git tag v0.2.0 && git push origin v0.2.0
-```
-
-De workflow *Release* controleert dat tag en versie gelijk zijn, draait alle tests,
-bouwt `wp-llm-ml.zip` en publiceert de GitHub Release. Sites met de plugin zien de update
-daarna in hun dashboard.
+1. `bin/version.sh set 0.2.0` — zet de versie in plugin-header, constante en readme.txt;
+   vul de changelog in `wp-content/plugins/wp-llm-ml/readme.txt` aan en commit/push.
+2. Op GitHub: **Releases → Draft a new release** → *Choose a tag*: typ `v0.2.0` →
+   *Create new tag* → *Target*: de branch met die commit → beschrijving leeg laten → **Publish release**.
+   (Of vanaf de command line: `git tag v0.2.0 && git push origin v0.2.0`.)
+3. De workflow *Release* controleert dat tag en versie gelijk zijn, draait alle tests,
+   bouwt `wp-llm-ml.zip`, hangt die aan de release en vult de release-notes in.
+   Sites met de plugin zien de update daarna in hun dashboard.
 
 Vier suites (153 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
 queries), HTTP (routing, redirects, hreflang, menu's, switcher, links, lijsten, REST, sitemaps) en
