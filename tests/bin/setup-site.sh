@@ -14,6 +14,7 @@ REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 WP_VERSION="${WP_VERSION:-7.1.4}"
 ELEMENTOR_VERSION="${ELEMENTOR_VERSION:-4.2.2}"
 YOAST_VERSION="${YOAST_VERSION:-28.2}"
+FORMINATOR_VERSION="${FORMINATOR_VERSION:-1.58.4}"
 GP_VERSION="${GP_VERSION:-3.6.1}"
 SQLITE_VERSION="${SQLITE_VERSION:-3.1.3}"
 
@@ -32,15 +33,16 @@ fi
 fetch "$(plugin sqlite-database-integration "$SQLITE_VERSION")" "sqlite-${SQLITE_VERSION}.zip" "$SQLITE_VERSION"
 fetch "$(plugin elementor "$ELEMENTOR_VERSION")" "elementor-${ELEMENTOR_VERSION}.zip" "$ELEMENTOR_VERSION"
 fetch "$(plugin wordpress-seo "$YOAST_VERSION")" "yoast-${YOAST_VERSION}.zip" "$YOAST_VERSION"
+fetch "$(plugin forminator "$FORMINATOR_VERSION")" "forminator-${FORMINATOR_VERSION}.zip" "$FORMINATOR_VERSION"
 fetch "https://downloads.wordpress.org/theme/generatepress.${GP_VERSION}.zip" "generatepress-${GP_VERSION}.zip"
 
 cd "$TARGET"
 rm -rf site
 unzip -q "dl/wordpress-${WP_VERSION}.zip" && mv wordpress site
-( cd site/wp-content/plugins && unzip -q "../../../dl/sqlite-${SQLITE_VERSION}.zip" && unzip -q "../../../dl/elementor-${ELEMENTOR_VERSION}.zip" && unzip -q "../../../dl/yoast-${YOAST_VERSION}.zip" )
+( cd site/wp-content/plugins && unzip -q "../../../dl/sqlite-${SQLITE_VERSION}.zip" && unzip -q "../../../dl/elementor-${ELEMENTOR_VERSION}.zip" && unzip -q "../../../dl/yoast-${YOAST_VERSION}.zip" && unzip -q "../../../dl/forminator-${FORMINATOR_VERSION}.zip" )
 ( cd site/wp-content/themes && unzip -q "../../../dl/generatepress-${GP_VERSION}.zip" )
 version_of() { grep -m1 -oE "$2" "$1" | grep -oE "[0-9][0-9.]*[0-9]" | head -1; }
-echo "Stack: WordPress $(version_of site/wp-includes/version.php "wp_version = '[^']+'"), Elementor $(version_of site/wp-content/plugins/elementor/elementor.php 'Version: .*'), Yoast SEO $(version_of site/wp-content/plugins/wordpress-seo/wp-seo.php 'Version: .*'), GeneratePress ${GP_VERSION}"
+echo "Stack: WordPress $(version_of site/wp-includes/version.php "wp_version = '[^']+'"), Elementor $(version_of site/wp-content/plugins/elementor/elementor.php 'Version: .*'), Yoast SEO $(version_of site/wp-content/plugins/wordpress-seo/wp-seo.php 'Version: .*'), Forminator $(version_of site/wp-content/plugins/forminator/forminator.php 'Version: .*'), GeneratePress ${GP_VERSION}"
 # Development: symlink the plugin. Package test (PLUGIN_ZIP set): leave it
 # out, the test installs it from the zip like a site owner would.
 if [ -z "${PLUGIN_ZIP:-}" ]; then

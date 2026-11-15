@@ -125,3 +125,6 @@ dialog.wpllmml-spell::backdrop { background: rgba(29, 35, 39, .55); }
 .wpllmml-spell__links { flex: 1; }
 .wpllmml-spell [hidden] { display: none !important; }
 .row-actions .wpllmml_spell .button-link { font-size: 13px; vertical-align: baseline; }
+.wpllmml-forms__cell .spinner { float: none; margin: 0 4px 0 0; }
+.wpllmml-forms__done { color: #00450c; }
+.wpllmml-forms__table code { font-size: 11px; }

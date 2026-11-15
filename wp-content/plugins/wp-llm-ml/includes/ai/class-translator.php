@@ -50,7 +50,7 @@ class Translator {
 		$prompt    = "You are a professional translator for a website. Translate every string in the JSON array from {$from_name} ({$from}) to {$to_name} ({$to}).\n"
 			. "Rules:\n"
 			. "- Return ONLY a JSON array of strings with exactly the same number of items, in the same order. No comments, no code fences.\n"
-			. "- Keep HTML tags and attributes, HTML comments (such as <!-- wp:paragraph -->), shortcodes in square brackets, placeholders (%s, %1\$s, %%title%%, {{...}}), URLs, e-mail addresses and line breaks exactly as they are. Translate only human-readable text, including alt and title attribute values.\n"
+			. "- Keep HTML tags and attributes, HTML comments (such as <!-- wp:paragraph -->), shortcodes in square brackets, placeholders (%s, %1\$s, %%title%%, {{...}}, form codes such as {name-1} and {all_fields}), URLs, e-mail addresses and line breaks exactly as they are. Translate only human-readable text, including alt and title attribute values.\n"
 			. "- Keep personal names, brand names and product names unchanged.\n"
 			. "- Preserve tone, register and meaning; write natural, fluent {$to_name} as a native speaker would.\n";
 		if ( '' !== $extra ) {

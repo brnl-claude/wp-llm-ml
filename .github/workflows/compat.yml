@@ -1,7 +1,7 @@
 name: Compatibility
 
-# Every week, and on demand: all tests against the newest releases of WordPress, Elementor
-# and Yoast SEO. The language switcher in the Elementor top bar uses Elementor's editor
+# Every week, and on demand: all tests against the newest releases of WordPress, Elementor,
+# Yoast SEO and Forminator. The language switcher in the Elementor top bar uses Elementor's editor
 # packages, which Elementor may change without notice; this run notices before the site
 # updates. A failed run is e-mailed by GitHub. Without the top-bar switcher the
 # "Translations" section in Elementor's Page Settings keeps working.
@@ -30,10 +30,11 @@ jobs:
           npm install --no-save --no-package-lock playwright@1.63.0
           npx playwright install --with-deps chromium
 
-      - name: Tests against the latest WordPress, Elementor and Yoast SEO
+      - name: Tests against the latest WordPress, Elementor, Yoast SEO and Forminator
         env:
           WP_VERSION: latest
           ELEMENTOR_VERSION: latest
           YOAST_VERSION: latest
+          FORMINATOR_VERSION: latest
           WPLLMML_BROWSER: '1'
         run: tests/run.sh "$RUNNER_TEMP/wpllmml"

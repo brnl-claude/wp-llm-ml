@@ -354,6 +354,11 @@ class Admin {
 					/* translators: 1: translated, 2: failed, 3: cancelled, 4: already existed */
 					'bulkDone'     => __( 'Done: %1$s translated (drafts, please review), %2$s failed, %3$s cancelled, %4$s already existed. Failed ones can be tried again in their row.', 'wp-llm-ml' ),
 					'cancelAll'    => __( 'Cancel all', 'wp-llm-ml' ),
+					'formWorking'  => __( 'Translating the form with AI…', 'wp-llm-ml' ),
+					/* translators: %1$s: elapsed time */
+					'formWorkingTime' => __( 'Translating the form with AI… %1$s', 'wp-llm-ml' ),
+					'formDone'     => __( 'Translated. Check the texts in Forminator.', 'wp-llm-ml' ),
+					'formAgain'    => __( 'Replace the texts of this copy with a new AI translation of the original form? Changes you made in the copy are overwritten.', 'wp-llm-ml' ),
 				),
 			)
 		);
@@ -436,9 +441,13 @@ class Admin {
 			'general' => __( 'Languages', 'wp-llm-ml' ),
 			'strings' => __( 'Texts', 'wp-llm-ml' ),
 			'widgets' => __( 'Widgets', 'wp-llm-ml' ),
+			'forms'   => __( 'Forms', 'wp-llm-ml' ),
 			'ai'      => __( 'AI', 'wp-llm-ml' ),
 			'help'    => __( 'How it works', 'wp-llm-ml' ),
 		);
+		if ( ! \WPLLMML\Integrations\Forminator::active() ) {
+			unset( $tabs['forms'] );
+		}
 		if ( ! isset( $tabs[ $tab ] ) ) {
 			$tab = 'general';
 		}
@@ -855,6 +864,13 @@ class Admin {
 	}
 
 	/**
+	 * Tab: Forminator forms per language.
+	 */
+	private function render_forms() {
+		\WPLLMML\Integrations\Forminator::render_tab();
+	}
+
+	/**
 	 * Save widget languages.
 	 */
 	public function save_widgets() {
@@ -957,6 +973,7 @@ class Admin {
 				<li><?php esc_html_e( 'In Pages, click the "+" of a language in the Languages column (or use the Language box in the editor, or the Translations section in Elementor\'s page settings).', 'wp-llm-ml' ); ?></li>
 				<li><?php esc_html_e( 'A draft copy is created, including the Elementor layout, page settings and Yoast SEO fields, and linked as translation.', 'wp-llm-ml' ); ?></li>
 				<li><?php esc_html_e( 'Translate the texts in Elementor as usual (or let AI do a first draft), check the slug and Yoast fields, and publish.', 'wp-llm-ml' ); ?></li>
+				<li><?php esc_html_e( 'Forminator forms: tab Forms makes a translated copy per language. Pages keep the original form; visitors of a translated page see the copy in their language.', 'wp-llm-ml' ); ?></li>
 			</ol>
 			<h2><?php esc_html_e( 'What visitors and search engines get', 'wp-llm-ml' ); ?></h2>
 			<ul>
