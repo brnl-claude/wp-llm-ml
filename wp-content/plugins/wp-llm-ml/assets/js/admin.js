@@ -29,12 +29,160 @@
 		return node;
 	}
 
-	// Confirm destructive AI re-translation.
-	document.addEventListener( 'click', function ( e ) {
-		var link = e.target.closest && e.target.closest( '.wpllmml-confirm' );
-		if ( link && ! window.confirm( cfg.i18n.confirmAi ) ) {
-			e.preventDefault();
+	function format( template ) {
+		var args = Array.prototype.slice.call( arguments, 1 );
+		return template.replace( /%(\d+)\$[sd]/g, function ( m, n ) {
+			return String( args[ n - 1 ] );
+		} ).replace( /%[sd]/, function () {
+			return String( args[ 0 ] );
+		} );
+	}
+
+	// Long-running actions (AI translation, language packs): confirm where
+	// needed, then show that something is happening and block double clicks.
+	function showBusy( el ) {
+		if ( el.getAttribute( 'data-wpllmml-busy' ) ) {
+			return;
 		}
+		el.setAttribute( 'data-wpllmml-busy', '1' );
+		el.setAttribute( 'aria-disabled', 'true' );
+		el.classList.add( 'wpllmml-is-busy' );
+		var note = el.ownerDocument.createElement( 'span' );
+		note.className = 'wpllmml-busy-note';
+		note.setAttribute( 'role', 'status' );
+		var spinner = el.ownerDocument.createElement( 'span' );
+		spinner.className = 'spinner is-active';
+		note.appendChild( spinner );
+		note.appendChild( document.createTextNode( cfg.i18n.busy ) );
+		el.insertAdjacentElement( 'afterend', note );
+	}
+	document.addEventListener( 'click', function ( e ) {
+		var el = e.target.closest && e.target.closest( '.wpllmml-confirm, .wpllmml-busy' );
+		if ( ! el ) {
+			return;
+		}
+		if ( el.getAttribute( 'data-wpllmml-busy' ) ) {
+			e.preventDefault(); // Already running.
+			return;
+		}
+		if ( el.classList.contains( 'wpllmml-confirm' ) && ! window.confirm( cfg.i18n.confirmAi ) ) {
+			e.preventDefault();
+			return;
+		}
+		if ( el.classList.contains( 'wpllmml-busy' ) ) {
+			if ( 'BUTTON' === el.tagName || 'INPUT' === el.tagName ) {
+				// Let the form submit first, then mark the button.
+				window.setTimeout( function () {
+					showBusy( el );
+				}, 0 );
+			} else {
+				showBusy( el );
+			}
+		}
+	} );
+
+	// Texts tab: fill empty fields with AI in small batches, with progress.
+	var running = false;
+	window.addEventListener( 'beforeunload', function ( e ) {
+		if ( running ) {
+			e.preventDefault();
+			e.returnValue = cfg.i18n.leave;
+			return cfg.i18n.leave;
+		}
+	} );
+	document.addEventListener( 'click', function ( e ) {
+		var button = e.target.closest && e.target.closest( '[data-wpllmml-ai-lang]' );
+		if ( ! button ) {
+			return;
+		}
+		e.preventDefault();
+		if ( running ) {
+			return;
+		}
+		var lang = button.getAttribute( 'data-wpllmml-ai-lang' );
+		var name = button.getAttribute( 'data-wpllmml-lang-name' ) || lang;
+		var box = document.querySelector( '.wpllmml-ai-progress' );
+		var bar = box.querySelector( 'progress' );
+		var status = box.querySelector( '.wpllmml-ai-status' );
+		var spinner = box.querySelector( '.spinner' );
+		var fields = Array.prototype.filter.call(
+			document.querySelectorAll( 'textarea[data-lang="' + lang + '"]' ),
+			function ( t ) {
+				return '' === t.value.trim();
+			}
+		);
+		box.hidden = false;
+		if ( ! fields.length ) {
+			bar.hidden = true;
+			spinner.classList.remove( 'is-active' );
+			status.textContent = format( cfg.i18n.nothing, name );
+			return;
+		}
+		var byKey = {};
+		var keys = fields.map( function ( t ) {
+			byKey[ t.getAttribute( 'data-key' ) ] = t;
+			return t.getAttribute( 'data-key' );
+		} );
+		var total = keys.length;
+		var done = 0;
+		var size = 8;
+		var buttons = document.querySelectorAll( '[data-wpllmml-ai-lang]' );
+		running = true;
+		Array.prototype.forEach.call( buttons, function ( b ) {
+			b.disabled = true;
+		} );
+		bar.hidden = false;
+		bar.max = total;
+		bar.value = 0;
+		spinner.classList.add( 'is-active' );
+		status.textContent = format( cfg.i18n.progress, 0, total, name );
+
+		function finish( message ) {
+			running = false;
+			spinner.classList.remove( 'is-active' );
+			Array.prototype.forEach.call( buttons, function ( b ) {
+				b.disabled = false;
+			} );
+			status.textContent = message;
+		}
+		function next() {
+			if ( ! keys.length ) {
+				finish( format( cfg.i18n.done, done, name ) );
+				return;
+			}
+			var batch = keys.splice( 0, size );
+			var data = { lang: lang };
+			var body = new FormData();
+			body.append( 'action', 'wpllmml_ai_strings_batch' );
+			body.append( '_ajax_nonce', cfg.nonce );
+			body.append( 'lang', data.lang );
+			batch.forEach( function ( k ) {
+				body.append( 'keys[]', k );
+			} );
+			fetch( cfg.ajax, { method: 'POST', credentials: 'same-origin', body: body } )
+				.then( function ( r ) {
+					return r.json();
+				} )
+				.then( function ( res ) {
+					if ( ! res || ! res.success ) {
+						throw new Error( res && res.data ? res.data : cfg.i18n.error );
+					}
+					Object.keys( res.data.translations ).forEach( function ( k ) {
+						if ( byKey[ k ] ) {
+							byKey[ k ].value = res.data.translations[ k ];
+							byKey[ k ].classList.add( 'wpllmml-filled' );
+						}
+					} );
+					done += batch.length;
+					bar.value = done;
+					status.textContent = format( cfg.i18n.progress, done, total, name );
+					next();
+				} )
+				.catch( function ( err ) {
+					finish( format( cfg.i18n.failed, err && err.message ? err.message : cfg.i18n.error, done ) );
+				} );
+		}
+		next();
 	} );
 
 	// Spell check.

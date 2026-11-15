@@ -76,6 +76,7 @@ class Admin {
 		add_action( 'wp_ajax_wpllmml_spellcheck', array( $this, 'ajax_spellcheck' ) );
 		add_action( 'wp_ajax_wpllmml_apply_fix', array( $this, 'ajax_apply_fix' ) );
 		add_action( 'wp_ajax_wpllmml_models', array( $this, 'ajax_models' ) );
+		add_action( 'wp_ajax_wpllmml_ai_strings_batch', array( $this, 'ajax_ai_strings_batch' ) );
 
 		if ( Languages::is_multilingual() ) {
 			add_action( 'add_meta_boxes', array( $this, 'add_meta_box' ), 10, 2 );
@@ -232,6 +233,16 @@ class Admin {
 					'saveFirst'    => __( 'Save your changes first: applying a suggestion saves the stored version of this page.', 'wp-llm-ml' ),
 					'confirmAi'    => __( 'Replace the text of this translation with a new AI translation of the source page? Your edits in this translation will be overwritten.', 'wp-llm-ml' ),
 					'loading'      => __( 'Loading…', 'wp-llm-ml' ),
+					'busy'         => __( 'Working… this can take a minute. Please keep this page open.', 'wp-llm-ml' ),
+					/* translators: 1: number done, 2: total, 3: language name */
+					'progress'     => __( 'Translating into %3$s… %1$d of %2$d texts done.', 'wp-llm-ml' ),
+					/* translators: 1: number of texts, 2: language name */
+					'done'         => __( 'Done: %1$d %2$s texts translated and saved. Please review them.', 'wp-llm-ml' ),
+					/* translators: %s: language name */
+					'nothing'      => __( 'All %s fields are already filled in. Empty a field to have it translated again.', 'wp-llm-ml' ),
+					/* translators: 1: error message, 2: number of texts saved before the error */
+					'failed'       => __( 'Stopped: %1$s (%2$d texts translated before this were saved).', 'wp-llm-ml' ),
+					'leave'        => __( 'Translation is still running. Leave this page?', 'wp-llm-ml' ),
 				),
 			)
 		);
@@ -343,7 +354,7 @@ class Admin {
 			echo esc_html( sprintf( __( 'WordPress language packs missing for: %s. Without them theme and plugin texts (buttons, dates, form messages) stay in English.', 'wp-llm-ml' ), implode( ', ', $missing ) ) );
 			echo '</p><form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="wpllmml_install_packs">';
 			wp_nonce_field( 'wpllmml_install_packs' );
-			submit_button( __( 'Install language packs', 'wp-llm-ml' ), 'secondary', 'submit', false );
+			submit_button( __( 'Install language packs', 'wp-llm-ml' ), 'secondary wpllmml-busy', 'submit', false );
 			echo '</form><p></p></div>';
 		}
 		?>
@@ -575,11 +586,16 @@ class Admin {
 				<input type="hidden" name="action" value="wpllmml_ai_strings">
 				<?php wp_nonce_field( 'wpllmml_ai_strings' ); ?>
 				<?php foreach ( $others as $code => $lang ) : ?>
-					<button type="submit" class="button" name="lang" value="<?php echo esc_attr( $code ); ?>">
+					<button type="submit" class="button wpllmml-ai-fill" name="lang" value="<?php echo esc_attr( $code ); ?>" data-wpllmml-ai-lang="<?php echo esc_attr( $code ); ?>" data-wpllmml-lang-name="<?php echo esc_attr( $lang['name'] ); ?>">
 						<?php /* translators: %s: language name */ echo esc_html( sprintf( __( 'Fill empty %s fields with AI', 'wp-llm-ml' ), $lang['name'] ) ); ?>
 					</button>
 				<?php endforeach; ?>
 			</form>
+			<div class="wpllmml-ai-progress" hidden>
+				<progress max="1" value="0"></progress>
+				<span class="spinner is-active"></span>
+				<span class="wpllmml-ai-status" role="status" aria-live="polite"></span>
+			</div>
 		<?php endif; ?>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<input type="hidden" name="action" value="wpllmml_save_strings">
@@ -601,7 +617,7 @@ class Admin {
 					<tr>
 						<td><span class="wpllmml-context"><?php echo esc_html( $context ); ?></span><div class="wpllmml-original"><?php echo esc_html( $original ); ?></div><input type="hidden" name="strings[<?php echo esc_attr( $key ); ?>][s]" value="<?php echo esc_attr( $original ); ?>"><input type="hidden" name="strings[<?php echo esc_attr( $key ); ?>][c]" value="<?php echo esc_attr( $context ); ?>"></td>
 						<?php foreach ( $others as $code => $lang ) : ?>
-							<td><textarea rows="<?php echo (int) $rows; ?>" lang="<?php echo esc_attr( Languages::hreflang( $code ) ); ?>" name="strings[<?php echo esc_attr( $key ); ?>][t][<?php echo esc_attr( $code ); ?>]" aria-label="<?php echo esc_attr( $lang['name'] ); ?>"><?php echo esc_textarea( isset( $table[ $key ]['t'][ $code ] ) ? $table[ $key ]['t'][ $code ] : '' ); ?></textarea></td>
+							<td><textarea rows="<?php echo (int) $rows; ?>" data-key="<?php echo esc_attr( $key ); ?>" data-lang="<?php echo esc_attr( $code ); ?>" lang="<?php echo esc_attr( Languages::hreflang( $code ) ); ?>" name="strings[<?php echo esc_attr( $key ); ?>][t][<?php echo esc_attr( $code ); ?>]" aria-label="<?php echo esc_attr( $lang['name'] ); ?>"><?php echo esc_textarea( isset( $table[ $key ]['t'][ $code ] ) ? $table[ $key ]['t'][ $code ] : '' ); ?></textarea></td>
 						<?php endforeach; ?>
 					</tr>
 				<?php endforeach; ?>
@@ -650,6 +666,9 @@ class Admin {
 	 * Fill empty string translations of one language with AI.
 	 */
 	public function handle_ai_strings() {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 300 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors -- AI calls can take a while.
+		}
 		$this->check_admin( 'wpllmml_ai_strings' );
 		$lang = isset( $_POST['lang'] ) ? sanitize_key( wp_unslash( $_POST['lang'] ) ) : '';
 		if ( ! Languages::exists( $lang ) || Languages::default_code() === $lang ) {
@@ -996,7 +1015,7 @@ class Admin {
 			<?php else : ?>
 				<a href="<?php echo esc_url( self::create_translation_url( $post->ID, $code ) ); ?>"><?php esc_html_e( 'Create', 'wp-llm-ml' ); ?></a>
 				<?php if ( Client::is_configured() ) : ?>
-					| <a href="<?php echo esc_url( self::create_translation_url( $post->ID, $code, 'edit', true ) ); ?>"><?php esc_html_e( 'Create & translate with AI', 'wp-llm-ml' ); ?></a>
+					| <a class="wpllmml-busy" href="<?php echo esc_url( self::create_translation_url( $post->ID, $code, 'edit', true ) ); ?>"><?php esc_html_e( 'Create & translate with AI', 'wp-llm-ml' ); ?></a>
 				<?php endif; ?>
 			<?php endif; ?>
 			</li>
@@ -1008,7 +1027,7 @@ class Admin {
 			if ( $source ) {
 				$url = wp_nonce_url( add_query_arg( array( 'action' => 'wpllmml_ai_translate', 'post' => $post->ID ), admin_url( 'admin-post.php' ) ), 'wpllmml_ai_translate_' . $post->ID );
 				printf(
-					'<p><a class="button wpllmml-confirm" href="%1$s">%2$s</a></p>',
+					'<p><a class="button wpllmml-confirm wpllmml-busy" href="%1$s">%2$s</a></p>',
 					esc_url( $url ),
 					/* translators: %s: language name */
 					esc_html( sprintf( __( 'Translate from %s with AI', 'wp-llm-ml' ), Languages::get( Languages::default_code() )['name'] ) )
@@ -1053,6 +1072,9 @@ class Admin {
 	 * Create a translation (optionally AI-translated) and open it.
 	 */
 	public function handle_create() {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 300 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors -- AI calls can take a while.
+		}
 		$post_id = isset( $_GET['post'] ) ? absint( $_GET['post'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification
 		check_admin_referer( 'wpllmml_create_' . $post_id );
 		$type = get_post_type_object( (string) get_post_type( $post_id ) );
@@ -1086,6 +1108,9 @@ class Admin {
 	 * Re-translate a translation from the default language with AI.
 	 */
 	public function handle_ai_translate() {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 300 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors -- AI calls can take a while.
+		}
 		$post_id = isset( $_GET['post'] ) ? absint( $_GET['post'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification
 		check_admin_referer( 'wpllmml_ai_translate_' . $post_id );
 		if ( ! current_user_can( 'edit_post', $post_id ) ) {
@@ -1194,6 +1219,64 @@ class Admin {
 			wp_send_json_error( $result->get_error_message() );
 		}
 		wp_send_json_success( array( 'applied' => (bool) $result ) );
+	}
+
+	/**
+	 * Translate a small batch of texts (Texts tab) and save them right away,
+	 * so the screen can show progress and no single request runs long enough
+	 * to hit a web server timeout.
+	 */
+	public function ajax_ai_strings_batch() {
+		check_ajax_referer( 'wpllmml_ajax' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( __( 'You are not allowed to do this.', 'wp-llm-ml' ), 403 );
+		}
+		$lang = isset( $_POST['lang'] ) ? sanitize_key( wp_unslash( $_POST['lang'] ) ) : '';
+		$keys = isset( $_POST['keys'] ) ? array_map( 'sanitize_key', (array) wp_unslash( $_POST['keys'] ) ) : array();
+		if ( ! Languages::exists( $lang ) || Languages::default_code() === $lang ) {
+			wp_send_json_error( __( 'Unknown language.', 'wp-llm-ml' ) );
+		}
+		if ( ! Client::is_configured() ) {
+			wp_send_json_error( __( 'The AI provider is not configured (API key and model are required).', 'wp-llm-ml' ) );
+		}
+		// Only texts the site really has: the originals come from the server, never from the request.
+		$todo = array();
+		foreach ( Strings::discover() as $row ) {
+			$key = md5( $row[0] );
+			if ( in_array( $key, $keys, true ) ) {
+				$todo[ $key ] = $row;
+			}
+		}
+		if ( ! $todo ) {
+			wp_send_json_success( array( 'translations' => (object) array() ) );
+		}
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 300 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
+		}
+		$result = ( new Translator() )->translate_strings( wp_list_pluck( array_values( $todo ), 0 ), Languages::default_code(), $lang );
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( $result->get_error_message() );
+		}
+		$table = Strings::table();
+		$out   = array();
+		$i     = 0;
+		foreach ( $todo as $key => $row ) {
+			$text = (string) $result[ $i++ ];
+			if ( ! current_user_can( 'unfiltered_html' ) ) {
+				$text = wp_kses_post( $text );
+			}
+			if ( ! isset( $table[ $key ] ) ) {
+				$table[ $key ] = array(
+					's' => $row[0],
+					'c' => $row[1],
+					't' => array(),
+				);
+			}
+			$table[ $key ]['t'][ $lang ] = $text;
+			$out[ $key ]                 = $text;
+		}
+		Strings::save( $table );
+		wp_send_json_success( array( 'translations' => (object) $out ) );
 	}
 
 	/**

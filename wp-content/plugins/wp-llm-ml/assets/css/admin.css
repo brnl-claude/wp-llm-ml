@@ -35,3 +35,11 @@
 .wpllmml-original { white-space: pre-wrap; word-break: break-word; max-height: 12em; overflow: auto; }
 .wpllmml-inline-form { margin: 1em 0; display: flex; flex-wrap: wrap; gap: .5em; }
 .wpllmml-help { max-width: 48rem; }
+.wpllmml-ai-progress { display: flex; align-items: center; gap: .6em; margin: .5em 0 1em; }
+.wpllmml-ai-progress[hidden] { display: none; }
+.wpllmml-ai-progress progress { width: 16em; height: 1em; }
+.wpllmml-ai-progress .spinner { float: none; margin: 0; }
+.wpllmml-strings textarea.wpllmml-filled { background: #f0f6fc; border-color: #72aee6; }
+.wpllmml-busy-note { display: flex; align-items: center; gap: .3em; margin: .4em 0 0; color: #50575e; }
+.wpllmml-busy-note .spinner { float: none; margin: 0; }
+.wpllmml-is-busy { pointer-events: none; opacity: .6; }

@@ -111,6 +111,52 @@ if ( function_exists( 'wp_get_ability' ) && wp_get_ability( 'wp-llm-ml/translate
 	check( 'list-languages ability', is_array( $langs ) && 3 === count( $langs ) );
 }
 
+section( 'Texts tab: batched AI fill endpoint (HTTP)' );
+$site = getenv( 'WPLLMML_SITE_URL' );
+if ( $site ) {
+	// Log in as user 1 the way the browser would: auth + logged-in cookies and a matching nonce.
+	$expire                      = time() + HOUR_IN_SECONDS;
+	$token                       = WP_Session_Tokens::get_instance( 1 )->create( $expire );
+	$_COOKIE[ LOGGED_IN_COOKIE ] = wp_generate_auth_cookie( 1, $expire, 'logged_in', $token );
+	$nonce                       = wp_create_nonce( 'wpllmml_ajax' );
+	$cookies                     = array(
+		AUTH_COOKIE      => wp_generate_auth_cookie( 1, $expire, 'auth', $token ),
+		LOGGED_IN_COOKIE => $_COOKIE[ LOGGED_IN_COOKIE ],
+	);
+	$post_batch = static function ( $lang, $keys, $with_cookies = true ) use ( $site, $nonce, $cookies ) {
+		$body = 'action=wpllmml_ai_strings_batch&_ajax_nonce=' . rawurlencode( $nonce ) . '&lang=' . rawurlencode( $lang );
+		foreach ( $keys as $key ) {
+			$body .= '&keys%5B%5D=' . rawurlencode( $key );
+		}
+		$response = wp_remote_post(
+			$site . '/wp-admin/admin-ajax.php',
+			array(
+				'timeout' => 60,
+				'body'    => $body,
+				'headers' => array( 'Content-Type' => 'application/x-www-form-urlencoded' ),
+				'cookies' => $with_cookies ? $cookies : array(),
+			)
+		);
+		return json_decode( wp_remote_retrieve_body( $response ), true );
+	};
+	$discovered = WPLLMML\Strings::discover();
+	$key_a      = md5( $discovered[0][0] );
+	$key_b      = md5( $discovered[1][0] );
+	$res        = $post_batch( 'ro', array( $key_a, $key_b, md5( 'not a text of this site' ) ) );
+	check( 'batch translates the requested texts', ! empty( $res['success'] ) && 0 === strpos( $res['data']['translations'][ $key_a ], 'RO:' ) && isset( $res['data']['translations'][ $key_b ] ), $res );
+	check( 'unknown text keys are ignored', ! empty( $res['success'] ) && 2 === count( $res['data']['translations'] ) );
+	wp_cache_delete( 'alloptions', 'options' );
+	wp_cache_delete( WPLLMML\Strings::OPTION, 'options' );
+	$stored = get_option( WPLLMML\Strings::OPTION );
+	check( 'batch is saved immediately', isset( $stored[ $key_a ]['t']['ro'] ) && $stored[ $key_a ]['t']['ro'] === $res['data']['translations'][ $key_a ] );
+	$res = $post_batch( 'en', array( $key_a ) );
+	check( 'default language refused', isset( $res['success'] ) && false === $res['success'] );
+	$res = $post_batch( 'ro', array( $key_a ), false );
+	check( 'logged-out request refused', empty( $res['success'] ) );
+} else {
+	check( 'WPLLMML_SITE_URL set for HTTP checks', false );
+}
+
 // Publish the ro translation for a visual check.
 wp_update_post( array( 'ID' => $ro, 'post_status' => 'publish' ) );
 echo "\nRomanian page: " . get_permalink( $ro ) . "\n";
