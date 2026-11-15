@@ -89,6 +89,9 @@ class Elementor_Editor {
 					'ownLayout'    => __( 'Has its own layout.', 'wp-llm-ml' ),
 					/* translators: %s: language name */
 					'syncing'      => sprintf( __( 'Updating from the %s page…', 'wp-llm-ml' ), $default['name'] ),
+					/* translators: %s: error message */
+					'syncFailed'   => __( 'The last update failed: %s', 'wp-llm-ml' ),
+					'syncRetry'    => __( 'Update now', 'wp-llm-ml' ),
 					'markReviewed' => __( 'Mark as reviewed', 'wp-llm-ml' ),
 					/* translators: %s: elapsed time, e.g. 0:35 */
 					'working'      => __( 'Translating with AI… %s', 'wp-llm-ml' ),
@@ -143,12 +146,16 @@ class Elementor_Editor {
 						'url'         => Admin::editor_url( $id ),
 						'review'      => $review ? Admin::review_text( $review, $default_name ) : '',
 						'follows'     => null,
-						'syncing'     => false,
+						'sync'        => '',
+						'syncError'   => '',
 					)
 				);
 				if ( $code !== $default && $source && Fields::is_elementor( $source ) && $item['elementor'] ) {
 					$item['follows'] = Sync::follows( $id );
-					$item['syncing'] = $item['follows'] && Sync::is_pending( $id );
+					if ( $item['follows'] ) {
+						$item['sync']      = Sync::state( $id );
+						$item['syncError'] = Sync::error( $id );
+					}
 				}
 			} elseif ( $can_create ) {
 				$item['create'] = Admin::create_translation_url( $from, $code, 'elementor' );

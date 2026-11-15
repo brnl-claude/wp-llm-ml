@@ -5,6 +5,9 @@ release-notes tonen de regels die sinds de vorige release zijn toegevoegd.
 
 ## 15 november 2026
 
+- Opgelost: na het opslaan van de Engelse pagina bleven NL en RO knipperen en werden ze niet bijgewerkt. Dat gebeurde op servers waar de achtergrondtaken van WordPress (WP-Cron) niet vanzelf draaien. Elementor en het overzicht van Pagina's starten de update nu zelf, en een update die al vastzat gaat verder zodra je een van beide opent.
+- Mislukt een update toch, dan krijgt de taal een rode markering met de reden en een knop "Update now". Hij blijft dan niet eindeloos knipperen.
+- Een update waarbij niets verandert, maakt geen nieuwe revisie meer aan.
 - Een layoutwijziging doe je nog maar één keer. Sla je de Engelse pagina op in Elementor, dan nemen de Nederlandse en Roemeense versie de nieuwe opbouw, volgorde en stijl binnen enkele seconden vanzelf over. Vertaalde teksten blijven staan. Nieuwe of gewijzigde Engelse teksten worden met AI vertaald en staan meteen live.
 - Zo'n vertaling krijgt een stip, in het overzicht van Pagina's en in Elementor. Opslaan in Elementor of "Mark as reviewed" haalt de stip weg. Zonder AI blijven nieuwe teksten Engels; zodra AI weer beschikbaar is, worden ze bij de volgende keer alsnog vertaald.
 - Wat je per taal bewust anders hebt, blijft staan: een ander formulier, plaatje of link, of een blok dat alleen op de Nederlandse pagina staat. Moet een vertaling helemaal los blijven van het Engels, kies dan "Keep its own layout" in het taalmenu. Een vertaling die niet als kopie van de Engelse pagina is gemaakt, wordt nooit overschreven. Elke automatische wijziging is terug te draaien via Elementor → Geschiedenis → Revisies.

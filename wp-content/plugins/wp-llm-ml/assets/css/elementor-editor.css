@@ -80,3 +80,5 @@
 }
 .wpllmml-ebar-item:hover,
 .wpllmml-ebar-item:focus { background: #f1f3f3; outline: none; }
+.wpllmml-ebar__lang.has-error { border-color: #f39c9c; color: #ffb4b4; opacity: 1; }
+.wpllmml-ebar__lang.has-error::before { content: "!"; position: absolute; top: -6px; left: -4px; width: 12px; height: 12px; border-radius: 50%; background: #e04f4f; color: #fff; font: 700 9px/12px Roboto, sans-serif; text-align: center; }

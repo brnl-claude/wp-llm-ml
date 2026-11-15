@@ -44,6 +44,15 @@ class Sync {
 	const META_OFF    = '_wpllmml_sync_off';
 	const META_RETRY  = '_wpllmml_sync_untranslated';
 	const PENDING     = '_wpllmml_sync_pending';
+	const META_ERROR  = '_wpllmml_sync_error';
+	const LOCK        = 'wpllmml_sync_lock_';
+	const ATTEMPTS    = '_wpllmml_sync_attempts';
+
+	/**
+	 * Seconds a queued sync may wait before the screens start it themselves
+	 * (WP-Cron does not run on every host).
+	 */
+	const STALL_AFTER = 45;
 
 	/**
 	 * True while the sync itself saves a translation (not an editor's save).
@@ -61,11 +70,39 @@ class Sync {
 	private static $retry = array();
 
 	/**
+	 * Translation being synced right now (for the fatal-error handler).
+	 *
+	 * @var int
+	 */
+	private static $current = 0;
+
+	/**
 	 * Register hooks.
 	 */
 	public function boot() {
 		add_action( 'elementor/document/after_save', array( $this, 'on_elementor_save' ), 20, 2 );
 		add_action( self::HOOK, array( $this, 'run_for_source' ) );
+		add_action( 'wp_ajax_wpllmml_sync_run', array( $this, 'ajax_run' ) );
+	}
+
+	/**
+	 * Run the queued sync of a source page in this request, after answering
+	 * the browser. The editor and the post lists call this when a sync waits,
+	 * so it does not depend on WP-Cron (whose loopback request fails on some
+	 * hosts, for example behind a proxy or in a container).
+	 */
+	public function ajax_run() {
+		check_ajax_referer( 'wpllmml_ajax' );
+		$source_id = isset( $_POST['source'] ) ? absint( $_POST['source'] ) : 0;
+		if ( ! $source_id || ! current_user_can( 'edit_post', $source_id ) ) {
+			wp_send_json_error( __( 'You are not allowed to do this.', 'wp-llm-ml' ), 403 );
+		}
+		if ( ! self::is_source( $source_id ) ) {
+			wp_send_json_success( array( 'started' => false ) );
+		}
+		Admin\Admin::respond_and_continue( array( 'started' => true ) );
+		$this->run_for_source( $source_id );
+		exit;
 	}
 
 	/**
@@ -143,7 +180,25 @@ class Sync {
 		} else {
 			update_post_meta( $target_id, self::META_OFF, 1 );
 			delete_post_meta( $target_id, self::PENDING );
+			delete_post_meta( $target_id, self::META_ERROR );
 		}
+	}
+
+	/**
+	 * Sync state of a translation.
+	 *
+	 * @param int $target_id Translation.
+	 * @return string running | queued | stalled (queued, nobody started it yet) | error | '' (up to date).
+	 */
+	public static function state( $target_id ) {
+		if ( get_transient( self::LOCK . $target_id ) ) {
+			return 'running';
+		}
+		$at = (int) get_post_meta( $target_id, self::PENDING, true );
+		if ( $at ) {
+			return time() - $at > self::STALL_AFTER ? 'stalled' : 'queued';
+		}
+		return self::error( $target_id ) ? 'error' : '';
 	}
 
 	/**
@@ -153,9 +208,18 @@ class Sync {
 	 * @return bool
 	 */
 	public static function is_pending( $target_id ) {
-		$at = (int) get_post_meta( $target_id, self::PENDING, true );
-		// A queue entry older than 15 minutes is stale (cron not running).
-		return $at && $at > time() - 15 * MINUTE_IN_SECONDS;
+		return in_array( self::state( $target_id ), array( 'running', 'queued', 'stalled' ), true );
+	}
+
+	/**
+	 * Why the last sync of a translation failed.
+	 *
+	 * @param int $target_id Translation.
+	 * @return string Empty when it did not fail.
+	 */
+	public static function error( $target_id ) {
+		$error = get_post_meta( $target_id, self::META_ERROR, true );
+		return is_array( $error ) && ! empty( $error['message'] ) ? (string) $error['message'] : '';
 	}
 
 	/**
@@ -230,15 +294,32 @@ class Sync {
 		if ( function_exists( 'set_time_limit' ) ) {
 			@set_time_limit( 900 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
 		}
-		foreach ( Translations::get_translations( $source_id ) as $code => $target_id ) {
-			if ( (int) $target_id === $source_id || ! self::follows( (int) $target_id ) ) {
-				continue;
+		// This run takes over the queued cron event.
+		wp_clear_scheduled_hook( self::HOOK, array( $source_id ) );
+		$busy = false;
+		// A second round picks up a source saved again while the first ran.
+		for ( $round = 0; $round < 3; $round++ ) {
+			$todo = array();
+			foreach ( Translations::get_translations( $source_id ) as $target_id ) {
+				$target_id = (int) $target_id;
+				if ( $target_id !== $source_id && self::follows( $target_id ) && ( 0 === $round || get_post_meta( $target_id, self::PENDING, true ) ) ) {
+					$todo[] = $target_id;
+				}
 			}
-			$result = self::sync_translation( $source_id, (int) $target_id );
-			if ( is_wp_error( $result ) && 'wpllmml_sync_busy' === $result->get_error_code() ) {
-				// Another sync or an AI translation is busy with this page: try again shortly.
-				self::schedule( $source_id, 60 );
+			if ( ! $todo ) {
+				break;
 			}
+			foreach ( $todo as $target_id ) {
+				$result = self::sync_translation( $source_id, $target_id );
+				$busy   = $busy || ( is_wp_error( $result ) && 'wpllmml_sync_busy' === $result->get_error_code() );
+			}
+			if ( $busy ) {
+				break;
+			}
+		}
+		if ( $busy && ! wp_next_scheduled( self::HOOK, array( $source_id ) ) ) {
+			// Another sync or an AI translation is busy with a translation: try again shortly.
+			wp_schedule_single_event( time() + 60, self::HOOK, array( $source_id ) );
 		}
 	}
 
@@ -251,14 +332,90 @@ class Sync {
 	 */
 	public static function sync_translation( $source_id, $target_id ) {
 		if ( ! Fields::is_elementor( $target_id ) || ! Fields::is_elementor( $source_id ) ) {
+			delete_post_meta( $target_id, self::PENDING );
 			return new \WP_Error( 'wpllmml_sync_skip', 'Not an Elementor page.' );
 		}
-		$lock = 'wpllmml_sync_lock_' . $target_id;
+		$lock = self::LOCK . $target_id;
 		if ( get_transient( $lock ) || Job::is_active( $target_id ) ) {
 			return new \WP_Error( 'wpllmml_sync_busy', 'Busy.' );
 		}
-		set_transient( $lock, 1, 15 * MINUTE_IN_SECONDS );
+		// A run the server killed (no error, no shutdown) leaves its attempt
+		// behind: after two of those, stop retrying and say so.
+		$attempts = (int) get_post_meta( $target_id, self::ATTEMPTS, true );
+		if ( $attempts >= 2 ) {
+			delete_post_meta( $target_id, self::ATTEMPTS );
+			self::fail( (int) $target_id, __( 'The server stopped the update twice before it finished, probably because of a time limit of the web server.', 'wp-llm-ml' ) );
+			return new \WP_Error( 'wpllmml_sync_failed', 'Stopped twice.' );
+		}
+		update_post_meta( $target_id, self::ATTEMPTS, $attempts + 1 );
+		set_transient( $lock, time(), 10 * MINUTE_IN_SECONDS );
+		self::$current = (int) $target_id;
+		static $handler = false;
+		if ( ! $handler ) {
+			register_shutdown_function( array( __CLASS__, 'on_shutdown' ) );
+			$handler = true;
+		}
+		$user = get_current_user_id();
+		try {
+			$result = self::merge_and_save( (int) $source_id, (int) $target_id );
+		} catch ( \Throwable $e ) {
+			$result = new \WP_Error( 'wpllmml_sync_failed', $e->getMessage() . ' (' . basename( $e->getFile() ) . ':' . $e->getLine() . ')' );
+		}
+		self::$writing = false;
+		self::$retry   = array();
+		wp_set_current_user( $user );
+		self::$current = 0;
+		delete_transient( $lock );
+		delete_post_meta( $target_id, self::ATTEMPTS );
+		if ( is_wp_error( $result ) && 'wpllmml_sync_unrelated' !== $result->get_error_code() ) {
+			self::fail( (int) $target_id, $result->get_error_message() );
+		}
+		return $result;
+	}
 
+	/**
+	 * Record why a sync failed, so the screens show it instead of waiting.
+	 *
+	 * @param int    $target_id Translation.
+	 * @param string $message   Reason.
+	 */
+	private static function fail( $target_id, $message ) {
+		update_post_meta(
+			$target_id,
+			self::META_ERROR,
+			array(
+				'message' => $message,
+				'at'      => time(),
+			)
+		);
+		delete_post_meta( $target_id, self::PENDING );
+	}
+
+	/**
+	 * A fatal error (or time limit) ended the request during a sync.
+	 */
+	public static function on_shutdown() {
+		if ( ! self::$current ) {
+			return;
+		}
+		$error   = error_get_last();
+		$message = $error && in_array( $error['type'], array( E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR ), true )
+			? $error['message'] . ' (' . basename( $error['file'] ) . ':' . $error['line'] . ')'
+			: __( 'The server stopped the update.', 'wp-llm-ml' );
+		self::fail( self::$current, $message );
+		delete_transient( self::LOCK . self::$current );
+		delete_post_meta( self::$current, self::ATTEMPTS );
+		self::$current = 0;
+	}
+
+	/**
+	 * The sync itself (locked and guarded by sync_translation()).
+	 *
+	 * @param int $source_id Source page.
+	 * @param int $target_id Translation.
+	 * @return array|\WP_Error
+	 */
+	private static function merge_and_save( $source_id, $target_id ) {
 		$source = Fields::elementor_data( $source_id );
 		$target = Fields::elementor_data( $target_id );
 		$raw    = get_post_meta( $target_id, self::META_BASE, true );
@@ -269,7 +426,6 @@ class Sync {
 			// Built separately (not copied from the source): its elements cannot
 			// be matched, so syncing would replace it. It keeps its own layout.
 			self::set_follow( $target_id, false );
-			delete_transient( $lock );
 			return new \WP_Error( 'wpllmml_sync_unrelated', 'The translation has its own layout.' );
 		}
 
@@ -282,12 +438,15 @@ class Sync {
 		// Translate new and changed texts in one request (the page's context stays together).
 		$from  = Languages::default_code();
 		$to    = Translations::get_lang( $target_id );
-		$texts = array_values( $pending );
-		$done  = $texts;
-		$ai    = false;
+		$texts    = array_values( $pending );
+		$done     = $texts;
+		$ai       = false;
+		$ai_error = '';
 		if ( $texts && Client::is_configured() ) {
 			$result = ( new Translator() )->translate_strings( $texts, $from, $to, array( 'max_chars' => 24000, 'max_items' => 500 ) );
-			if ( ! is_wp_error( $result ) ) {
+			if ( is_wp_error( $result ) ) {
+				$ai_error = $result->get_error_message();
+			} else {
 				$done = $result;
 				$ai   = true;
 			}
@@ -299,27 +458,31 @@ class Sync {
 		$merged = self::fill_tokens( $merged, $replace );
 
 		// Save through Elementor (rebuilds CSS and the plain-text content) as
-		// someone allowed to edit the page; in the background that is its author.
-		$user = get_current_user_id();
+		// someone allowed to edit the page; in the background that is its
+		// author. Nothing changed: no save, so no new revision.
 		if ( ! current_user_can( 'edit_post', $target_id ) ) {
 			wp_set_current_user( (int) get_post_field( 'post_author', $target_id ) );
 		}
 		self::$writing = true;
-		Fields::save_elementor_data( $target_id, $merged );
+		if ( $merged !== $target ) {
+			Fields::save_elementor_data( $target_id, $merged );
+		}
 		foreach ( self::layout_meta_keys() as $key ) {
 			$value = get_post_meta( $source_id, $key, true );
 			if ( '' === $value || null === $value ) {
 				delete_post_meta( $target_id, $key );
-			} else {
+			} elseif ( get_post_meta( $target_id, $key, true ) !== $value ) {
 				update_post_meta( $target_id, $key, wp_slash( $value ) );
 			}
 		}
 		self::$writing = false;
-		wp_set_current_user( $user );
 
 		update_post_meta( $target_id, self::META_BASE, wp_slash( wp_json_encode( $source ) ) );
 		update_post_meta( $target_id, self::META_SYNCED, time() );
-		delete_post_meta( $target_id, self::PENDING );
+		delete_post_meta( $target_id, self::META_ERROR );
+		if ( Fields::elementor_data( $source_id ) === $source ) {
+			delete_post_meta( $target_id, self::PENDING );
+		} // Else the source was saved again meanwhile: stays queued for another round.
 		if ( $texts && ! $ai ) {
 			// Offer these to the AI again on the next sync.
 			$retry = array();
@@ -339,9 +502,13 @@ class Sync {
 			$review['translated']   += $ai ? count( $texts ) : 0;
 			$review['untranslated'] += $ai ? 0 : count( $texts );
 			$review['at']            = time();
+			if ( $ai_error ) {
+				$review['error'] = $ai_error;
+			} elseif ( $ai ) {
+				unset( $review['error'] );
+			}
 			update_post_meta( $target_id, self::META_REVIEW, $review );
 		}
-		delete_transient( $lock );
 		do_action( 'wpllmml_translation_synced', $target_id, $source_id, count( $texts ) );
 		return array(
 			'translated'   => $ai ? count( $texts ) : 0,

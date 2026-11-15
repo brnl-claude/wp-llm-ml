@@ -15,7 +15,7 @@ zelf instelt.
 |---|---|
 | **Talen & URL's** | Standaardtaal houdt de huidige URL's (`/gestalt-therapy/`); andere talen krijgen een prefix (`/nl/…`, `/ro/…`). Vertaalde slugs (`/nl/gestalt-therapie/`) of dezelfde slug (`/nl/reiki/`) — beide kunnen. |
 | **Inhoud** | Eén pagina per taal, gekoppeld als vertaling. "Vertaling maken" kopieert de pagina als concept, inclusief Elementor-layout, pagina-instellingen, GeneratePress-instellingen en Yoast-velden. Je vertaalt daarna gewoon in Elementor. |
-| **Layout volgt Engels** | Sla je de Engelse Elementor-pagina op, dan nemen de vertalingen op de achtergrond de opbouw, volgorde en stijl over (elementen gekoppeld via hun Elementor-id, drieweg-vergelijking met de vorige stand). Vertaalde teksten blijven; nieuwe/gewijzigde teksten gaan in één AI-verzoek en staan direct live, met een review-stip. Bewuste verschillen per taal (formulier-shortcode, afbeelding, link, blokken alleen in de vertaling) blijven. Per vertaling uit te zetten ("Keep its own layout"). |
+| **Layout volgt Engels** | Sla je de Engelse Elementor-pagina op, dan nemen de vertalingen op de achtergrond (gestart door de editor zelf, WP-Cron als reserve) de opbouw, volgorde en stijl over (elementen gekoppeld via hun Elementor-id, drieweg-vergelijking met de vorige stand). Vertaalde teksten blijven; nieuwe/gewijzigde teksten gaan in één AI-verzoek en staan direct live, met een review-stip. Bewuste verschillen per taal (formulier-shortcode, afbeelding, link, blokken alleen in de vertaling) blijven. Per vertaling uit te zetten ("Keep its own layout"). |
 | **Elementor-bovenbalk** | EN · NL · RO naast desktop/tablet/mobiel: wisselen zonder herladen, `+RO` maakt een vertaling (AI of kopie). Gebouwd op Elementors editor-pakketten; ontbreken die in een toekomstige versie, dan blijft *Pagina-instellingen → Translations* werken. Een wekelijkse CI-run test tegen de nieuwste Elementor. |
 | **Browserdetectie** | Bezoeker met NL-browser die op de Engelse homepage binnenkomt → één keer naar `/nl/`. Op andere pagina's een kleine balk "Deze pagina is ook beschikbaar in het Nederlands". Gekozen taal wordt onthouden (functionele cookie `wpllmml_lang`). Draait in de browser, dus werkt met page-caching; zoekmachines worden nooit doorgestuurd. |
 | **Taalwisselaar** | Automatisch in het GeneratePress-menu (dropdown of naast elkaar), als Elementor-widget, klassieke widget of shortcode `[wpllmml_switcher]`. |
@@ -80,7 +80,7 @@ tests/package.sh        # bouwt de zip, installeert hem in een verse site en tes
 bin/build-zip.sh        # alleen de zip bouwen → dist/wp-llm-ml.zip
 ```
 
-Zes suites (259 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
+Zes suites (278 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
 queries), HTTP (routing, redirects, hreflang, menu's, switcher, links, lijsten, REST, sitemaps),
 AI (tegen een nep-OpenAI-server: Elementor-teksten, repeaters, Yoast-velden, spellingscontrole, Abilities),
 sync (layout volgt Engels: nieuw/gewijzigd/verwijderd/verplaatst, lokale verschillen, zonder AI, zonder historie),

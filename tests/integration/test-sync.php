@@ -291,6 +291,76 @@ check( 'its layout is untouched', Fields::elementor_data( $own ) === $own_data )
 check( 'it keeps its own layout from now on', ! Sync::follows( $own ) );
 wp_delete_post( $own, true );
 
+section( 'States: queued, waiting too long, done' );
+$v6 = $v5;
+$v6[0]['elements'][0]['elements'][0]['settings']['align'] = 'justify';
+wpllmml_editor_save( $src, $v6 );
+check( 'queued right after the save', 'queued' === Sync::state( $nl ), Sync::state( $nl ) );
+update_post_meta( $nl, Sync::PENDING, time() - Sync::STALL_AFTER - 5 );
+check( 'nobody started it: stalled (the screens start it then)', 'stalled' === Sync::state( $nl ) && Sync::is_pending( $nl ) );
+$revisions = count( wp_get_post_revisions( $nl ) );
+( new Sync() )->run_for_source( $src );
+check( 'done', '' === Sync::state( $nl ) && 'justify' === wpllmml_widgets( $nl )['hea0001']['settings']['align'] );
+check( 'the queued cron event is taken over', ! wp_next_scheduled( Sync::HOOK, array( $src ) ) );
+check( 'a change leaves a revision', count( wp_get_post_revisions( $nl ) ) === $revisions + 1 );
+Sync::sync_translation( $src, $nl );
+check( 'nothing changed: no new revision', count( wp_get_post_revisions( $nl ) ) === $revisions + 1 );
+
+section( 'A failing sync says why instead of waiting forever' );
+$boom = static function () {
+	throw new RuntimeException( 'Widget exploded' );
+};
+add_filter( 'wpllmml_sync_per_language_keys', $boom );
+update_post_meta( $nl, Sync::PENDING, time() );
+$result = Sync::sync_translation( $src, $nl );
+remove_filter( 'wpllmml_sync_per_language_keys', $boom );
+check( 'error returned', is_wp_error( $result ) && 'wpllmml_sync_failed' === $result->get_error_code() );
+check( 'state error with the reason', 'error' === Sync::state( $nl ) && false !== strpos( Sync::error( $nl ), 'Widget exploded' ), Sync::error( $nl ) );
+check( 'no longer waiting', ! Sync::is_pending( $nl ) );
+check( 'lock released', false === get_transient( Sync::LOCK . $nl ) );
+check( 'Sync::$writing reset', false === Sync::$writing );
+Sync::sync_translation( $src, $nl );
+check( 'the next successful sync clears the error', '' === Sync::state( $nl ) && '' === Sync::error( $nl ) );
+update_post_meta( $nl, Sync::ATTEMPTS, 2 ); // Two earlier runs were killed by the server.
+update_post_meta( $nl, Sync::PENDING, time() );
+Sync::sync_translation( $src, $nl );
+check( 'killed twice: stops and says why', 'error' === Sync::state( $nl ) && false !== strpos( Sync::error( $nl ), 'time limit' ), Sync::error( $nl ) );
+Sync::sync_translation( $src, $nl );
+check( 'a manual retry runs again', '' === Sync::state( $nl ) );
+
+section( 'AI unreachable: layout updated, texts in English, reason shown' );
+$settings['ai']['base_url'] = 'http://localhost:9/v1';
+Settings::save( $settings );
+delete_post_meta( $nl, Sync::META_REVIEW );
+$v7 = $v6;
+$v7[0]['elements'][0]['elements'][] = wpllmml_w( 'new0003', 'heading', array( 'title' => 'Third section' ) );
+wpllmml_editor_save( $src, $v7 );
+( new Sync() )->run_for_source( $src );
+$review = get_post_meta( $nl, Sync::META_REVIEW, true );
+check( 'layout applied', isset( wpllmml_widgets( $nl )['new0003'] ) && 'Third section' === wpllmml_widgets( $nl )['new0003']['settings']['title'] );
+check( 'reason kept for the review note', is_array( $review ) && ! empty( $review['error'] ), $review );
+check( 'not a sync error', '' === Sync::state( $nl ) );
+$settings['ai']['base_url'] = getenv( 'WPLLMML_MOCK_AI' ) ? getenv( 'WPLLMML_MOCK_AI' ) : 'http://localhost:8891/v1';
+Settings::save( $settings );
+
+section( 'Saved again while a sync ran: another round follows' );
+$v8      = $v7;
+$changed = false;
+$resave  = static function ( $keys ) use ( &$changed, $src, $v8 ) {
+	if ( ! $changed ) {
+		$changed = true;
+		$v8[0]['elements'][0]['elements'][0]['settings']['align'] = 'left';
+		update_post_meta( $src, '_elementor_data', wp_slash( wp_json_encode( $v8 ) ) );
+	}
+	return $keys;
+};
+add_filter( 'wpllmml_sync_per_language_keys', $resave );
+update_post_meta( $nl, Sync::PENDING, time() );
+( new Sync() )->run_for_source( $src );
+remove_filter( 'wpllmml_sync_per_language_keys', $resave );
+check( 'the newer save is applied in the same run', 'left' === wpllmml_widgets( $nl )['hea0001']['settings']['align'], wpllmml_widgets( $nl )['hea0001']['settings']['align'] );
+check( 'nothing left waiting', '' === Sync::state( $nl ) );
+
 section( 'Translations of other pages and non-Elementor posts are left alone' );
 $post_en = get_page_by_path( 'liminal-space', OBJECT, 'post' );
 check( 'block editor post is not a sync source', $post_en && ! Sync::is_source( $post_en->ID ) );
