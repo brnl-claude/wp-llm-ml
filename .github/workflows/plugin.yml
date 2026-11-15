@@ -1,0 +1,65 @@
+name: Plugin
+
+# Pull requests are tested. Every push to main is tested, built and published as a GitHub
+# Release, so https://github.com/brnl-claude/wp-llm-ml/releases/latest/download/wp-llm-ml.zip
+# always points at the newest plugin, and installed sites see it under Dashboard → Updates.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # The whole history: the version counts commits, and the release notes compare with
+          # the previous release's changelog.
+          fetch-depth: 0
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, sqlite3, curl, zip, mbstring, intl
+          coverage: none
+
+      # The version is 0.<minor>.<patch>: minor from version.properties, patch the number of
+      # commits on main since the one that last changed that file. Each of those commits was a
+      # release, so patch goes up by one per release and starts at 0 when minor is raised.
+      - name: Work out the version
+        run: |
+          version=$(bin/version.sh)
+          echo "WPLLMML_RELEASE=$version" >> "$GITHUB_ENV"
+          echo "Version $version"
+
+      - name: PHP syntax
+        run: find wp-content/plugins/wp-llm-ml -name '*.php' -print0 | xargs -0 -n1 php -l > /dev/null
+
+      - name: Integration tests (WordPress + GeneratePress + Elementor + Yoast)
+        run: tests/run.sh "$RUNNER_TEMP/wpllmml"
+
+      # Builds dist/wp-llm-ml.zip with the version above, installs it in a fresh WordPress and
+      # updates it from a fake release the way the "Update now" button does.
+      - name: Package test
+        run: tests/package.sh "$RUNNER_TEMP/wpllmml-package"
+
+      # The zip is only kept as a release asset, not as a workflow artifact: artifacts count
+      # towards the Actions storage quota, release assets don't.
+      - name: Publish release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The changelog entries added since the release before this one.
+          previous=$(gh release view --json targetCommitish --jq .targetCommitish 2>/dev/null || true)
+          python3 .github/scripts/release_notes.py "$previous" > notes.md
+          printf '\nGebouwd van %s.\n' "$GITHUB_SHA" >> notes.md
+          gh release create "v$WPLLMML_RELEASE" dist/wp-llm-ml.zip \
+            --title "LLM Multilingual $WPLLMML_RELEASE" \
+            --notes-file notes.md \
+            --target "$GITHUB_SHA" \
+            --latest

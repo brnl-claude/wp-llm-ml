@@ -1,0 +1,37 @@
+/* LLM Multilingual — admin */
+.wpllmml-langs { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.wpllmml-lang {
+	display: inline-block;
+	min-width: 2.2em;
+	padding: 1px 5px;
+	border: 1px solid #c3c4c7;
+	border-radius: 3px;
+	font-size: 11px;
+	line-height: 1.6;
+	text-align: center;
+	text-decoration: none;
+}
+.wpllmml-lang.is-own { background: #1d2327; border-color: #1d2327; color: #fff; }
+.wpllmml-lang.is-publish { background: #edfaef; border-color: #68de7c; color: #00450c; }
+.wpllmml-lang.is-draft,
+.wpllmml-lang.is-pending,
+.wpllmml-lang.is-future,
+.wpllmml-lang.is-private { background: #fcf9e8; border-color: #dba617; color: #614a00; }
+.wpllmml-lang.is-missing { border-style: dashed; color: #50575e; }
+.column-wpllmml { width: 9em; }
+.wpllmml-box-list { margin: 0 0 1em; }
+.wpllmml-box-list li { margin-bottom: .4em; }
+.wpllmml-status { color: #646970; }
+.wpllmml-unlink { color: #b32d2e; }
+.wpllmml-spell-results ul { margin: .5em 0; }
+.wpllmml-spell-results li { padding: .4em 0; border-bottom: 1px solid #f0f0f1; }
+.wpllmml-spell-results del { color: #b32d2e; }
+.wpllmml-spell-results ins { color: #00450c; text-decoration: none; font-weight: 600; }
+.wpllmml-spell-results .description { display: block; margin: .2em 0; }
+.wpllmml-languages input[readonly] { background: #f6f7f7; }
+.wpllmml-strings td { vertical-align: top; width: 33%; }
+.wpllmml-strings textarea { width: 100%; }
+.wpllmml-context { display: block; color: #646970; font-size: 11px; text-transform: uppercase; letter-spacing: .02em; }
+.wpllmml-original { white-space: pre-wrap; word-break: break-word; max-height: 12em; overflow: auto; }
+.wpllmml-inline-form { margin: 1em 0; display: flex; flex-wrap: wrap; gap: .5em; }
+.wpllmml-help { max-width: 48rem; }

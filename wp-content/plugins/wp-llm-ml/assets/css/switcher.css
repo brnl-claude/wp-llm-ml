@@ -1,0 +1,94 @@
+/* LLM Multilingual — language switcher and suggestion bar. Inherits theme colours and fonts. */
+.wpllmml-switcher__list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: .25em .9em;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.wpllmml-switcher--list .wpllmml-switcher__list {
+	flex-direction: column;
+}
+.wpllmml-switcher__item {
+	margin: 0;
+}
+.wpllmml-switcher a {
+	text-decoration: none;
+}
+.wpllmml-switcher .is-current a {
+	font-weight: 700;
+}
+.wpllmml-switcher .is-untranslated a {
+	opacity: .75;
+}
+.wpllmml-switcher--dropdown {
+	position: relative;
+	display: inline-block;
+}
+.wpllmml-switcher__toggle {
+	cursor: pointer;
+	list-style: none;
+}
+.wpllmml-switcher__toggle::-webkit-details-marker {
+	display: none;
+}
+.wpllmml-switcher__toggle::after {
+	content: "";
+	display: inline-block;
+	margin-left: .4em;
+	border: .3em solid transparent;
+	border-top-color: currentColor;
+	border-bottom: 0;
+	vertical-align: middle;
+}
+.wpllmml-switcher--dropdown .wpllmml-switcher__list {
+	position: absolute;
+	z-index: 100;
+	min-width: 100%;
+	flex-direction: column;
+	padding: .4em .8em;
+	background: #fff;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, .12);
+}
+.wpllmml-suggest {
+	position: fixed;
+	z-index: 99999;
+	right: 1rem;
+	bottom: 1rem;
+	left: 1rem;
+	max-width: 40rem;
+	margin: 0 auto;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: .5em 1em;
+	padding: .8em 2.8em .8em 1.1em;
+	background: #fff;
+	color: #222;
+	border-radius: 6px;
+	box-shadow: 0 6px 24px rgba(0, 0, 0, .18);
+	font-size: 15px;
+	line-height: 1.4;
+}
+.wpllmml-suggest a {
+	font-weight: 700;
+}
+.wpllmml-suggest__close {
+	position: absolute;
+	top: 50%;
+	right: .5em;
+	transform: translateY(-50%);
+	padding: .1em .45em;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font-size: 1.4em;
+	line-height: 1;
+	cursor: pointer;
+}
+/* GeneratePress: keep the menu switcher's sub-menu narrow. */
+.main-navigation .wpllmml-menu-parent .sub-menu {
+	width: auto;
+	min-width: 9em;
+}
