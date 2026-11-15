@@ -79,6 +79,21 @@ function section( name ) {
 		check( 'done again, same copy', /Contact form test \(NL\)/.test( await cell( 'nl' ).innerText() ) );
 		check( 'Romanian not touched', 1 === await cell( 'ro' ).locator( '.wpllmml-form-ai' ).count() );
 
+		section( 'The guide (How it works)' );
+		await page.goto( BASE + '/wp-admin/options-general.php?page=wpllmml&tab=help' );
+		check( 'all chapters', 14 === await page.locator( '.wpllmml-help__section' ).count() );
+		const figures = page.locator( '.wpllmml-help__figure img' );
+		const count = await figures.count();
+		for ( let i = 0; i < count; i++ ) {
+			await figures.nth( i ).scrollIntoViewIfNeeded();
+		}
+		await page.waitForTimeout( 800 );
+		const loaded = await figures.evaluateAll( ( images ) => images.filter( ( image ) => image.complete && image.naturalWidth > 0 ).length );
+		check( 'every screenshot loads', 10 === count && count === loaded, { count, loaded } );
+		await page.click( '.wpllmml-help__toc a[href="#wpllmml-forms"]' );
+		await page.waitForTimeout( 300 );
+		check( 'contents link jumps to its chapter', ( await page.locator( '#wpllmml-forms' ).boundingBox() ).y < 120 );
+
 		check( 'no JavaScript errors', 0 === errors.length, errors.slice( 0, 3 ) );
 	} catch ( e ) {
 		check( 'browser flow', false, e.message );
