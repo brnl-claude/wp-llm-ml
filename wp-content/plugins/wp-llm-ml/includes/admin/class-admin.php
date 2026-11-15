@@ -966,24 +966,7 @@ class Admin {
 	 * Tab: short manual.
 	 */
 	private function render_help() {
-		?>
-		<div class="wpllmml-help">
-			<h2><?php esc_html_e( 'Translating a page', 'wp-llm-ml' ); ?></h2>
-			<ol>
-				<li><?php esc_html_e( 'In Pages, click the "+" of a language in the Languages column (or use the Language box in the editor, or the Translations section in Elementor\'s page settings).', 'wp-llm-ml' ); ?></li>
-				<li><?php esc_html_e( 'A draft copy is created, including the Elementor layout, page settings and Yoast SEO fields, and linked as translation.', 'wp-llm-ml' ); ?></li>
-				<li><?php esc_html_e( 'Translate the texts in Elementor as usual (or let AI do a first draft), check the slug and Yoast fields, and publish.', 'wp-llm-ml' ); ?></li>
-				<li><?php esc_html_e( 'Forminator forms: tab Forms makes a translated copy per language. Pages keep the original form; visitors of a translated page see the copy in their language.', 'wp-llm-ml' ); ?></li>
-			</ol>
-			<h2><?php esc_html_e( 'What visitors and search engines get', 'wp-llm-ml' ); ?></h2>
-			<ul>
-				<li><?php esc_html_e( 'Every language has its own URLs (/nl/..., /ro/...); default-language URLs do not change.', 'wp-llm-ml' ); ?></li>
-				<li><?php esc_html_e( 'Server-rendered, fully translated HTML with the right <html lang>, hreflang and x-default alternates, og:locale and schema inLanguage — readable for search engines and AI crawlers without JavaScript.', 'wp-llm-ml' ); ?></li>
-				<li><?php esc_html_e( 'Menus, internal links, the logo link, search, blog lists and previous/next links stay inside the visitor\'s language.', 'wp-llm-ml' ); ?></li>
-				<li><?php esc_html_e( 'REST API: every post has a "wpllmml" field with its language and translations; collections accept ?lang=nl; /wp-json/wpllmml/v1/languages lists the languages. AI agents can use the abilities in the "Multilingual" category.', 'wp-llm-ml' ); ?></li>
-			</ul>
-		</div>
-		<?php
+		require WPLLMML_DIR . 'includes/admin/views/help.php';
 	}
 
 	/* ------------------------------------------------------------------

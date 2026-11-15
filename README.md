@@ -82,9 +82,14 @@ nieuwe zip uploaden en "Huidige vervangen" kiezen. Update-check uitzetten:
 tests/run.sh            # bouwt een wegwerp-WordPress (SQLite) met GeneratePress, Elementor en Yoast
 tests/package.sh        # bouwt de zip, installeert hem in een verse site en test een update via een (nep)release
 bin/build-zip.sh        # alleen de zip bouwen → dist/wp-llm-ml.zip
+bin/help-screenshots.sh # screenshots van de handleiding (How it works) opnieuw maken → assets/help/*.webp
 ```
 
-Zeven suites (385 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
+De handleiding in de plugin (Instellingen → Languages → How it works) staat in
+`includes/admin/views/help.php`. Verander je een scherm dat erin staat, draai dan `bin/help-screenshots.sh`:
+dat bouwt een testsite met voorbeeldinhoud (`tests/fixtures/help/`) en maakt alle screenshots opnieuw.
+
+Zeven suites (388 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
 queries), HTTP (routing, redirects, hreflang, menu's, switcher, links, lijsten, REST, sitemaps),
 AI (tegen een nep-OpenAI-server: Elementor-teksten, repeaters, Yoast-velden, spellingscontrole, Abilities),
 sync (layout volgt Engels: nieuw/gewijzigd/verwijderd/verplaatst, lokale verschillen, zonder AI, zonder historie),
