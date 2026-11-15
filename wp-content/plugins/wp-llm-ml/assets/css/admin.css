@@ -79,3 +79,10 @@
 .wpllmml-lang.is-syncing { animation: wpllmml-pulse 1.2s ease-in-out infinite; }
 .wpllmml-lang-menu__note { max-width: 22em; padding: 6px 12px 8px; margin-bottom: 4px; border-bottom: 1px solid #f0f0f1; color: #50575e; font-size: 12px; line-height: 1.45; white-space: normal; }
 .wpllmml-lang.has-sync-error { border-color: #d63638; color: #8a2424; background: #fcf0f1; }
+/* Bulk AI translation */
+.wpllmml-bulk { clear: both; }
+.wpllmml-bulk [hidden] { display: none !important; }
+.wpllmml-bulk progress { display: block; width: 100%; max-width: 40em; height: .8em; margin: .2em 0 .4em; }
+.wpllmml-bulk__status { margin: .3em 0; }
+.wpllmml-bulk__item { margin: .4em 0; }
+.wpllmml-bulk > .button { margin: 0 0 .8em; }

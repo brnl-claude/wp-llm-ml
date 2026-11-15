@@ -257,7 +257,21 @@
 			return;
 		}
 		e.preventDefault();
+		runJob( el );
+	} );
+
+	// One page translation job, shown next to the button (or in its list row).
+	// onEnd( 'done' | 'cancelled' | 'error' | 'busy' ) is called once.
+	function runJob( el, onEnd ) {
+		var ended = false;
+		function end( outcome ) {
+			if ( ! ended ) {
+				ended = true;
+				( onEnd || function () {} )( outcome );
+			}
+		}
 		if ( el.getAttribute( 'data-wpllmml-running' ) ) {
+			end( 'busy' );
 			return;
 		}
 		var isList = 'list' === el.getAttribute( 'data-context' );
@@ -316,6 +330,7 @@
 		function stop( message, canRetry ) {
 			forget();
 			busy( false );
+			end( message === cfg.i18n.cancelled ? 'cancelled' : 'error' );
 			status.textContent = prefix + message + ' ';
 			if ( canRetry ) {
 				var again = document.createElement( 'button' );
@@ -332,6 +347,7 @@
 		function finishInList( d ) {
 			forget();
 			busy( false );
+			end( 'done' );
 			status.textContent = prefix + cfg.i18n.listDone + ' ';
 			if ( d.editor && d.editor !== d.edit ) {
 				status.appendChild( link( d.editor, cfg.i18n.editElementor ) );
@@ -376,6 +392,7 @@
 						finishInList( d );
 					} else {
 						forget();
+						end( 'done' );
 						status.textContent = cfg.i18n.opening;
 						window.location.href = d.redirect;
 					}
@@ -412,6 +429,11 @@
 			}
 			stop( cfg.i18n.cancelled, true );
 		} );
+		el.wpllmmlCancel = function () {
+			if ( ! ended ) {
+				cancelButton.click();
+			}
+		};
 
 		busy( true );
 		status.textContent = prefix + cfg.i18n.preparing;
@@ -433,7 +455,148 @@
 		} ).catch( function ( err ) {
 			stop( format( cfg.i18n.stopped, err.message ), true );
 		} );
+	}
+
+	// Bulk action "Translate into … with AI" in the post lists: the server
+	// lists what is missing, then the pages are translated two at a time,
+	// each with the same background job (and progress in its row) as one
+	// started from the language menu. Copies are a normal bulk action.
+	var BULK_PARALLEL = 2;
+	document.addEventListener( 'click', function ( e ) {
+		var button = e.target.closest && e.target.closest( '#doaction, #doaction2' );
+		if ( ! button ) {
+			return;
+		}
+		var select = document.getElementById( 'doaction2' === button.id ? 'bulk-action-selector-bottom' : 'bulk-action-selector-top' );
+		var match = select && /^wpllmml_ai_([a-z0-9_-]+)$/.exec( select.value );
+		if ( ! match ) {
+			return;
+		}
+		e.preventDefault();
+		if ( document.querySelector( '.wpllmml-bulk.is-running' ) ) {
+			return;
+		}
+		var ids = Array.prototype.map.call( document.querySelectorAll( '#the-list input[name="post[]"]:checked' ), function ( box ) {
+			return box.value;
+		} );
+		if ( ! ids.length ) {
+			window.alert( cfg.i18n.bulkNone ); // eslint-disable-line no-alert
+			return;
+		}
+		var body = new FormData();
+		body.append( 'action', 'wpllmml_bulk_plan' );
+		body.append( '_ajax_nonce', cfg.nonce );
+		body.append( 'target', match[ 1 ] );
+		ids.forEach( function ( id ) {
+			body.append( 'posts[]', id );
+		} );
+		button.disabled = true;
+		fetch( cfg.ajax, { method: 'POST', credentials: 'same-origin', body: body } ).then( readJson ).then( function ( res ) {
+			button.disabled = false;
+			if ( ! res || ! res.success ) {
+				throw new Error( res && res.data ? res.data : cfg.i18n.error );
+			}
+			if ( ! res.data.tasks.length ) {
+				window.alert( format( cfg.i18n.bulkNothing, res.data.skipped ) ); // eslint-disable-line no-alert
+				return;
+			}
+			if ( window.confirm( format( cfg.i18n.bulkConfirm, res.data.tasks.length, res.data.skipped ) ) ) { // eslint-disable-line no-alert
+				runBulk( res.data );
+			}
+		} ).catch( function ( err ) {
+			button.disabled = false;
+			window.alert( format( cfg.i18n.stopped, err.message ) ); // eslint-disable-line no-alert
+		} );
 	} );
+
+	function runBulk( plan ) {
+		var form = document.getElementById( 'posts-filter' );
+		var panel = el( 'div', '', 'notice notice-info wpllmml-bulk is-running' );
+		var title = el( 'p', '', 'wpllmml-bulk__title' );
+		var bar = document.createElement( 'progress' );
+		var line = el( 'p', '', 'wpllmml-bulk__status' );
+		var list = el( 'div', '', 'wpllmml-bulk__items' );
+		var cancelAll = el( 'button', cfg.i18n.cancelAll, 'button button-small' );
+		cancelAll.type = 'button';
+		title.appendChild( el( 'strong', format( cfg.i18n.bulkTitle, plan.tasks.length ) ) );
+		line.setAttribute( 'role', 'status' );
+		bar.max = plan.tasks.length;
+		bar.value = 0;
+		panel.appendChild( title );
+		panel.appendChild( bar );
+		panel.appendChild( line );
+		panel.appendChild( list );
+		panel.appendChild( cancelAll );
+		// Where WordPress puts its notices: below the heading, above the status links.
+		var anchor = document.querySelector( '.wrap > .wp-header-end' );
+		if ( anchor ) {
+			anchor.insertAdjacentElement( 'afterend', panel );
+		} else {
+			form.parentNode.insertBefore( panel, form );
+		}
+
+		var queue = plan.tasks.slice();
+		var running = [];
+		var counts = { done: 0, error: 0, cancelled: 0 };
+		var stopped = false;
+		function update() {
+			var finished = counts.done + counts.error + counts.cancelled;
+			bar.value = finished;
+			if ( running.length || ( queue.length && ! stopped ) ) {
+				line.textContent = format( cfg.i18n.bulkProgress, finished, plan.tasks.length, running.map( function ( r ) {
+					return r.title + ' → ' + r.language;
+				} ).join( ', ' ) );
+				return;
+			}
+			panel.classList.remove( 'is-running', 'notice-info' );
+			panel.classList.add( counts.error ? 'notice-warning' : 'notice-success' );
+			cancelAll.hidden = true;
+			title.firstChild.textContent = cfg.i18n.bulkFinished;
+			line.textContent = format( cfg.i18n.bulkDone, counts.done, counts.error, counts.cancelled + queue.length, plan.skipped );
+		}
+		function button( task ) {
+			var found = document.querySelector( '#post-' + task.source + ' .wpllmml-ai-post[data-mode="create"][data-lang="' + task.lang + '"]' );
+			if ( found ) {
+				return found;
+			}
+			// The source is not on this screen: show the job in the panel.
+			var host = el( 'div', '', 'wpllmml-bulk__item' );
+			host.setAttribute( 'data-wpllmml-job-host', '1' );
+			host.appendChild( el( 'strong', task.title + ' → ' + task.language ) );
+			var hidden = el( 'button', '', 'wpllmml-ai-post' );
+			hidden.type = 'button';
+			hidden.hidden = true;
+			hidden.setAttribute( 'data-mode', 'create' );
+			hidden.setAttribute( 'data-source', task.source );
+			hidden.setAttribute( 'data-lang', task.lang );
+			hidden.setAttribute( 'data-context', 'list' );
+			host.appendChild( hidden );
+			list.appendChild( host );
+			return hidden;
+		}
+		function next() {
+			while ( ! stopped && queue.length && running.length < BULK_PARALLEL ) {
+				( function ( task ) {
+					task.el = button( task );
+					running.push( task );
+					runJob( task.el, function ( outcome ) {
+						running.splice( running.indexOf( task ), 1 );
+						counts[ 'done' === outcome ? 'done' : ( 'cancelled' === outcome ? 'cancelled' : 'error' ) ]++;
+						next();
+					} );
+				}( queue.shift() ) );
+			}
+			update();
+		}
+		cancelAll.addEventListener( 'click', function () {
+			stopped = true;
+			running.slice().forEach( function ( task ) {
+				task.el.wpllmmlCancel();
+			} );
+			update();
+		} );
+		next();
+	}
 
 	// Spell check.
 	document.addEventListener( 'click', function ( e ) {

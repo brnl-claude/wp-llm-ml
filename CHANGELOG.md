@@ -5,6 +5,8 @@ release-notes tonen de regels die sinds de vorige release zijn toegevoegd.
 
 ## 15 november 2026
 
+- Meerdere pagina's tegelijk vertalen: vink ze aan in het overzicht van Pagina's of Berichten en kies bij Bulkacties bijvoorbeeld "Translate into Nederlands with AI" of "Translate into all languages with AI". Er lopen twee vertalingen tegelijk, met de voortgang in elke rij en bovenaan de pagina. De vertalingen worden als concept opgeslagen. Talen die al een vertaling hebben, worden overgeslagen. "Cancel all" stopt alles; houd het scherm open tot het klaar is.
+- Met "Create … translation (copy)" maak je in één keer conceptkopieën om zelf te vertalen.
 - Opgelost: na het opslaan van de Engelse pagina bleven NL en RO knipperen en werden ze niet bijgewerkt. Dat gebeurde op servers waar de achtergrondtaken van WordPress (WP-Cron) niet vanzelf draaien. Elementor en het overzicht van Pagina's starten de update nu zelf, en een update die al vastzat gaat verder zodra je een van beide opent.
 - Mislukt een update toch, dan krijgt de taal een rode markering met de reden en een knop "Update now". Hij blijft dan niet eindeloos knipperen.
 - Een update waarbij niets verandert, maakt geen nieuwe revisie meer aan.

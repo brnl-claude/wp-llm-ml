@@ -86,6 +86,7 @@ class Admin {
 		add_action( 'wp_ajax_wpllmml_ai_post_run', array( $this, 'ajax_ai_post_run' ) );
 		add_action( 'wp_ajax_wpllmml_ai_post_status', array( $this, 'ajax_ai_post_status' ) );
 		add_action( 'wp_ajax_wpllmml_ai_post_cancel', array( $this, 'ajax_ai_post_cancel' ) );
+		add_action( 'wp_ajax_wpllmml_bulk_plan', array( $this, 'ajax_bulk_plan' ) );
 
 		if ( Languages::is_multilingual() ) {
 			add_action( 'add_meta_boxes', array( $this, 'add_meta_box' ), 10, 2 );
@@ -95,6 +96,8 @@ class Admin {
 			foreach ( Translations::post_types() as $type ) {
 				add_filter( "manage_{$type}_posts_columns", array( $this, 'list_column' ) );
 				add_action( "manage_{$type}_posts_custom_column", array( $this, 'list_column_content' ), 10, 2 );
+				add_filter( "bulk_actions-edit-{$type}", array( $this, 'bulk_actions' ) );
+				add_filter( "handle_bulk_actions-edit-{$type}", array( $this, 'handle_bulk_action' ), 10, 3 );
 			}
 		}
 	}
@@ -318,6 +321,19 @@ class Admin {
 					'retry'        => __( 'Try again', 'wp-llm-ml' ),
 					/* translators: %s: error message */
 					'stopped'      => __( 'Stopped: %s', 'wp-llm-ml' ),
+					'bulkNone'     => __( 'Select the pages to translate first.', 'wp-llm-ml' ),
+					/* translators: %1$s: number of translations that already exist */
+					'bulkNothing'  => __( 'Nothing to translate: the selected pages already have this translation (%1$s).', 'wp-llm-ml' ),
+					/* translators: 1: number of translations to make, 2: number that already exist */
+					'bulkConfirm'  => __( 'Create and translate %1$s translations with AI (%2$s already exist and are left alone)? They are saved as drafts. Keep this page open until it is done; leaving it stops the translations that are running.', 'wp-llm-ml' ),
+					/* translators: %1$s: number of translations */
+					'bulkTitle'    => __( 'Making %1$s translations with AI, two at a time', 'wp-llm-ml' ),
+					'bulkFinished' => __( 'Bulk translation finished', 'wp-llm-ml' ),
+					/* translators: 1: finished, 2: total, 3: pages being translated now */
+					'bulkProgress' => __( '%1$s of %2$s done. Now: %3$s', 'wp-llm-ml' ),
+					/* translators: 1: translated, 2: failed, 3: cancelled, 4: already existed */
+					'bulkDone'     => __( 'Done: %1$s translated (drafts, please review), %2$s failed, %3$s cancelled, %4$s already existed. Failed ones can be tried again in their row.', 'wp-llm-ml' ),
+					'cancelAll'    => __( 'Cancel all', 'wp-llm-ml' ),
 				),
 			)
 		);
@@ -1107,6 +1123,146 @@ class Admin {
 			esc_html( $label ),
 			implode( '', $items ) // phpcs:ignore WordPress.Security.EscapeOutput -- escaped above.
 		);
+	}
+
+	/**
+	 * Bulk actions in post lists: translate the selected posts into one or
+	 * all languages, with AI or as copies.
+	 *
+	 * @param array $actions Bulk actions.
+	 * @return array
+	 */
+	public function bulk_actions( $actions ) {
+		$type = get_post_type_object( (string) get_current_screen()->post_type );
+		if ( ! $type || ! current_user_can( $type->cap->create_posts ) ) {
+			return $actions;
+		}
+		$targets = array();
+		foreach ( Languages::all() as $code => $lang ) {
+			$targets[ $code ] = $lang['name'];
+		}
+		$ai = Client::is_configured();
+		foreach ( array( 'ai', 'copy' ) as $kind ) {
+			if ( 'ai' === $kind && ! $ai ) {
+				continue;
+			}
+			foreach ( $targets as $code => $name ) {
+				$actions[ 'wpllmml_' . $kind . '_' . $code ] = 'ai' === $kind
+					/* translators: %s: language name */
+					? sprintf( __( 'Translate into %s with AI', 'wp-llm-ml' ), $name )
+					/* translators: %s: language name */
+					: sprintf( __( 'Create %s translation (copy)', 'wp-llm-ml' ), $name );
+			}
+			$actions[ 'wpllmml_' . $kind . '_all' ] = 'ai' === $kind
+				? __( 'Translate into all languages with AI', 'wp-llm-ml' )
+				: __( 'Create translations in all languages (copy)', 'wp-llm-ml' );
+		}
+		return $actions;
+	}
+
+	/**
+	 * What a bulk translation would create: for each selected post its
+	 * default-language version (the source the others follow), once per
+	 * translation group, and only the languages it does not have yet.
+	 *
+	 * @param int[]  $ids    Selected posts.
+	 * @param string $target Language code or "all".
+	 * @return array tasks (source, lang, title, language), skipped (count).
+	 */
+	public static function bulk_plan( array $ids, $target ) {
+		$default = Languages::default_code();
+		$codes   = 'all' === $target ? array_keys( Languages::all() ) : array( $target );
+		$codes   = array_values( array_filter( $codes, array( Languages::class, 'exists' ) ) );
+		$tasks   = array();
+		$skipped = 0;
+		$seen    = array();
+		foreach ( $ids as $id ) {
+			$post = get_post( (int) $id );
+			if ( ! $post || ! Translations::is_translatable_type( $post->post_type ) ) {
+				continue;
+			}
+			$source = Translations::get_translation( $post, $default );
+			$source = $source ? (int) $source : (int) $post->ID;
+			if ( isset( $seen[ $source ] ) ) {
+				continue;
+			}
+			$seen[ $source ] = true;
+			$type            = get_post_type_object( $post->post_type );
+			if ( ! $type || ! current_user_can( 'edit_post', $source ) || ! current_user_can( $type->cap->create_posts ) ) {
+				++$skipped;
+				continue;
+			}
+			$translations = Translations::get_translations( $source );
+			$own          = Translations::get_lang( $source );
+			foreach ( $codes as $code ) {
+				if ( $code === $own ) {
+					continue;
+				}
+				if ( isset( $translations[ $code ] ) ) {
+					++$skipped;
+					continue;
+				}
+				$tasks[] = array(
+					'source'   => $source,
+					'lang'     => $code,
+					'title'    => html_entity_decode( get_the_title( $source ), ENT_QUOTES, 'UTF-8' ),
+					'language' => Languages::get( $code )['name'],
+				);
+			}
+		}
+		return array(
+			'tasks'   => $tasks,
+			'skipped' => $skipped,
+		);
+	}
+
+	/**
+	 * The browser asks what a bulk AI translation will do, then runs the
+	 * tasks one or two at a time with the page translation jobs.
+	 */
+	public function ajax_bulk_plan() {
+		check_ajax_referer( 'wpllmml_ajax' );
+		$ids    = isset( $_POST['posts'] ) ? array_map( 'absint', (array) wp_unslash( $_POST['posts'] ) ) : array();
+		$target = isset( $_POST['target'] ) ? sanitize_key( wp_unslash( $_POST['target'] ) ) : '';
+		wp_send_json_success( self::bulk_plan( $ids, $target ) );
+	}
+
+	/**
+	 * Bulk action submitted: copies are made here; AI translation runs in
+	 * the browser (admin.js), so this only answers when JavaScript is off.
+	 *
+	 * @param string $redirect Redirect URL.
+	 * @param string $action   Action.
+	 * @param int[]  $ids      Selected posts.
+	 * @return string
+	 */
+	public function handle_bulk_action( $redirect, $action, $ids ) {
+		if ( ! preg_match( '/^wpllmml_(ai|copy)_([a-z0-9_-]+)$/', (string) $action, $m ) ) {
+			return $redirect;
+		}
+		if ( 'ai' === $m[1] ) {
+			self::store_flash( array( 'wpllmml_err' => rawurlencode( __( 'Translating with AI needs JavaScript in your browser.', 'wp-llm-ml' ) ) ) );
+			return $redirect;
+		}
+		$plan    = self::bulk_plan( array_map( 'intval', (array) $ids ), $m[2] );
+		$created = 0;
+		$failed  = array();
+		foreach ( $plan['tasks'] as $task ) {
+			$result = Duplicator::create( $task['source'], $task['lang'] );
+			if ( is_wp_error( $result ) ) {
+				$failed[] = $task['title'] . ' (' . $task['language'] . '): ' . $result->get_error_message();
+			} else {
+				++$created;
+			}
+		}
+		/* translators: 1: number created, 2: number skipped */
+		$message = sprintf( __( '%1$d draft translations created; %2$d already existed. Translate them in Elementor or with AI.', 'wp-llm-ml' ), $created, $plan['skipped'] );
+		$args    = array( 'wpllmml_msg' => rawurlencode( $message ) );
+		if ( $failed ) {
+			$args['wpllmml_err'] = rawurlencode( implode( ' · ', $failed ) );
+		}
+		self::store_flash( $args );
+		return $redirect;
 	}
 
 	/**
