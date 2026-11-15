@@ -38,6 +38,22 @@ $activated = activate_plugin( $file );
 check( 'activates without errors', null === $activated, is_wp_error( $activated ) ? $activated->get_error_message() : '' );
 $old_version = $data['Version'];
 
+// Log in like a browser, for admin pages over HTTP (the site runs the files on disk).
+$expire                      = time() + DAY_IN_SECONDS;
+$token                       = WP_Session_Tokens::get_instance( 1 )->create( $expire );
+$_COOKIE[ LOGGED_IN_COOKIE ] = wp_generate_auth_cookie( 1, $expire, 'logged_in', $token );
+$admin_cookies               = array(
+	AUTH_COOKIE      => wp_generate_auth_cookie( 1, $expire, 'auth', $token ),
+	LOGGED_IN_COOKIE => $_COOKIE[ LOGGED_IN_COOKIE ],
+);
+$admin_page                  = static function () use ( $admin_cookies ) {
+	return wp_remote_retrieve_body( wp_remote_get( getenv( 'WPLLMML_SITE_URL' ) . '/wp-admin/index.php', array( 'timeout' => 30, 'cookies' => $admin_cookies ) ) );
+};
+section( 'No update notice after a fresh installation' );
+$dashboard = $admin_page();
+check( 'dashboard loads for the admin', false !== strpos( $dashboard, 'id="wpbody"' ) );
+check( 'no "updated" notice on a fresh install', false === strpos( $dashboard, 'wpllmml-update-notice' ) );
+
 section( 'Front end after installation' );
 WPLLMML\Settings::save(
 	array_merge(
@@ -112,6 +128,32 @@ check( 'new version on disk', $mock === $after['Version'], $after['Version'] );
 check( 'still active after update', is_plugin_active( $file ) );
 check( 'settings kept', count( WPLLMML\Settings::get( 'languages' ) ) >= 1 );
 echo "  ($old_version → {$after['Version']})\n";
+section( 'One-time notice after the update' );
+// PHP's opcode cache may serve the old plugin files for a moment after the update.
+for ( $try = 0; $try < 10; $try++ ) {
+	$dashboard = $admin_page();
+	if ( false !== strpos( $dashboard, 'wpllmml-update-notice' ) ) {
+		break;
+	}
+	sleep( 1 );
+}
+check( 'notice shows the new version', false !== strpos( $dashboard, 'LLM Multilingual was updated to version ' . $mock . '.' ), substr( $dashboard, 0, 200 ) );
+check( "notice lists what's new from the zip", false !== strpos( $dashboard, '<li>Test entry with <code>code</code> and <strong>bold</strong></li>' ) && false !== strpos( $dashboard, '<li>Second entry</li>' ) );
+preg_match( '/_ajax_nonce\', ("[^"]+")/', $dashboard, $m );
+$dismiss = wp_remote_post(
+	getenv( 'WPLLMML_SITE_URL' ) . '/wp-admin/admin-ajax.php',
+	array(
+		'timeout' => 30,
+		'cookies' => $admin_cookies,
+		'body'    => array(
+			'action'      => 'wpllmml_dismiss_update_notice',
+			'_ajax_nonce' => isset( $m[1] ) ? json_decode( $m[1] ) : '',
+		),
+	)
+);
+check( 'closing the notice is accepted', ! empty( json_decode( wp_remote_retrieve_body( $dismiss ), true )['success'] ), wp_remote_retrieve_body( $dismiss ) );
+check( 'notice stays closed', false === strpos( $admin_page(), 'wpllmml-update-notice' ) );
+
 $response = wp_remote_get( $front . '/nl/', array( 'timeout' => 30 ) );
 check( 'site works after update', 200 === wp_remote_retrieve_response_code( $response ) && false !== strpos( wp_remote_retrieve_body( $response ), 'id="wpllmml-detect"' ) );
 

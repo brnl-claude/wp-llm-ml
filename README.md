@@ -39,7 +39,8 @@ zelf instelt.
      datumnotatie en `<html lang>`, niet de URL's).
    - Klik **Install language packs** (vertaalt knoppen, datums, formulier-meldingen).
    - *Switcher in menu*: **Primary Menu** (GeneratePress). Tip: "Language code (NL)" is compacter in het menu.
-4. Pagina's → kolom **Languages** → klik `+NL` bij een pagina → vertaal in Elementor → publiceer.
+4. Pagina's → kolom **Languages** → klik `+NL` bij een pagina en kies "Create translation (copy) and open
+   Elementor" of "Create & translate with AI" → controleer in Elementor → publiceer.
 5. Optioneel AI: tab **AI** → model kiezen. Zet de sleutel bij voorkeur in `wp-config.php`:
    ```php
    define( 'WPLLMML_AI_API_KEY', 'hyai-rt-…' );
@@ -76,7 +77,7 @@ tests/package.sh        # bouwt de zip, installeert hem in een verse site en tes
 bin/build-zip.sh        # alleen de zip bouwen → dist/wp-llm-ml.zip
 ```
 
-Vier suites (187 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
+Vier suites (193 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
 queries), HTTP (routing, redirects, hreflang, menu's, switcher, links, lijsten, REST, sitemaps) en
 AI (tegen een nep-OpenAI-server: Elementor-teksten, repeaters, Yoast-velden, spellingscontrole, Abilities)
 en package (zip installeren in een verse site, activeren, updaten via de WordPress-upgrader).

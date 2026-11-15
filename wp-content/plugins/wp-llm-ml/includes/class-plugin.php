@@ -82,6 +82,7 @@ final class Plugin {
 
 		if ( is_admin() ) {
 			( new Admin\Admin( $this->router ) )->boot();
+			( new Admin\Update_Notice() )->boot();
 		}
 		( new Admin\Admin_Bar( $this->router ) )->boot();
 
@@ -117,6 +118,7 @@ final class Plugin {
 	 * Activation: store defaults so the settings screen starts filled in.
 	 */
 	public static function activate() {
+		Admin\Update_Notice::on_activate();
 		if ( false === get_option( Settings::OPTION ) ) {
 			add_option( Settings::OPTION, Settings::defaults(), '', true );
 		}

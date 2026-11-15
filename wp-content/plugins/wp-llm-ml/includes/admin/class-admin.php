@@ -254,6 +254,12 @@ class Admin {
 					/* translators: 1: elapsed time, 2: texts done, 3: total texts */
 					'postProgressParts' => __( 'Translating the whole page with AI… %1$s (%2$d of %3$d texts)', 'wp-llm-ml' ),
 					'cancel'       => __( 'Cancel', 'wp-llm-ml' ),
+					/* translators: %s: elapsed time */
+					'listProgress' => __( 'Translating with AI… %s', 'wp-llm-ml' ),
+					'listDone'     => __( 'Translated. Please review before publishing:', 'wp-llm-ml' ),
+					'editElementor'=> __( 'Edit with Elementor', 'wp-llm-ml' ),
+					'edit'         => __( 'Edit', 'wp-llm-ml' ),
+					'preview'      => __( 'Preview', 'wp-llm-ml' ),
 					'cancelled'    => __( 'Cancelled. Nothing was changed.', 'wp-llm-ml' ),
 					'opening'      => __( 'Done. Opening the translation…', 'wp-llm-ml' ),
 					'retry'        => __( 'Try again', 'wp-llm-ml' ),
@@ -910,32 +916,96 @@ class Admin {
 		}
 		$own          = Translations::get_lang( $post_id );
 		$translations = Translations::get_translations( $post_id );
-		echo '<span class="wpllmml-langs">';
+		$ai           = Client::is_configured();
+		$can_edit     = current_user_can( 'edit_post', $post_id );
+		$builder      = 'builder' === get_post_meta( $post_id, '_elementor_edit_mode', true ) && did_action( 'elementor/loaded' );
+		$default_name = Languages::get( Languages::default_code() )['name'];
+		echo '<div class="wpllmml-langs-cell" data-wpllmml-job-host="1"><span class="wpllmml-langs">';
 		foreach ( Languages::all() as $code => $lang ) {
 			$label = strtoupper( $code );
 			if ( $code === $own ) {
 				printf( '<span class="wpllmml-lang is-own" title="%s">%s</span>', esc_attr( $lang['name'] ), esc_html( $label ) );
-			} elseif ( isset( $translations[ $code ] ) ) {
-				$status = get_post_status( $translations[ $code ] );
-				printf(
-					'<a class="wpllmml-lang is-%1$s" href="%2$s" title="%3$s">%4$s</a>',
-					esc_attr( $status ),
-					esc_url( (string) get_edit_post_link( $translations[ $code ] ) ),
+				continue;
+			}
+			if ( isset( $translations[ $code ] ) ) {
+				$tid    = (int) $translations[ $code ];
+				$status = get_post_status( $tid );
+				$items  = array();
+				if ( current_user_can( 'edit_post', $tid ) ) {
+					if ( self::editor_url( $tid ) !== (string) get_edit_post_link( $tid, 'raw' ) ) {
+						$items[] = sprintf( '<a href="%s">%s</a>', esc_url( self::editor_url( $tid ) ), esc_html__( 'Edit with Elementor', 'wp-llm-ml' ) );
+					}
+					$items[] = sprintf( '<a href="%s">%s</a>', esc_url( (string) get_edit_post_link( $tid, 'raw' ) ), esc_html__( 'Edit', 'wp-llm-ml' ) );
+				}
+				$items[] = sprintf( '<a href="%s">%s</a>', esc_url( 'publish' === $status ? get_permalink( $tid ) : get_preview_post_link( $tid ) ), 'publish' === $status ? esc_html__( 'View', 'wp-llm-ml' ) : esc_html__( 'Preview', 'wp-llm-ml' ) );
+				if ( $ai && $code !== Languages::default_code() && current_user_can( 'edit_post', $tid ) ) {
+					$items[] = sprintf(
+						'<button type="button" class="wpllmml-ai-post wpllmml-confirm" data-mode="retranslate" data-post="%1$d" data-lang="%2$s" data-context="list">%3$s</button>',
+						$tid,
+						esc_attr( $code ),
+						/* translators: %s: language name */
+						esc_html( sprintf( __( 'Translate again from %s with AI', 'wp-llm-ml' ), $default_name ) )
+					);
+				}
+				$status_object = get_post_status_object( $status );
+				self::print_lang_menu(
+					'is-' . $status,
+					$label,
 					/* translators: 1: language, 2: status */
-					esc_attr( sprintf( __( 'Edit %1$s translation (%2$s)', 'wp-llm-ml' ), $lang['name'], $status ) ),
-					esc_html( $label )
+					sprintf( __( '%1$s translation (%2$s)', 'wp-llm-ml' ), $lang['name'], $status_object ? $status_object->label : $status ),
+					$items,
+					$code
 				);
-			} elseif ( current_user_can( 'edit_post', $post_id ) ) {
-				printf(
-					'<a class="wpllmml-lang is-missing" href="%1$s" title="%2$s">+%3$s</a>',
-					esc_url( self::create_translation_url( $post_id, $code ) ),
-					/* translators: %s: language */
-					esc_attr( sprintf( __( 'Create %s translation', 'wp-llm-ml' ), $lang['name'] ) ),
-					esc_html( $label )
+				continue;
+			}
+			if ( ! $can_edit ) {
+				continue;
+			}
+			$items   = array();
+			$items[] = sprintf(
+				'<a href="%1$s">%2$s</a>',
+				esc_url( self::create_translation_url( $post_id, $code, $builder ? 'elementor' : 'edit' ) ),
+				$builder ? esc_html__( 'Create translation (copy) and open Elementor', 'wp-llm-ml' ) : esc_html__( 'Create translation (copy)', 'wp-llm-ml' )
+			);
+			if ( $ai ) {
+				$items[] = sprintf(
+					'<button type="button" class="wpllmml-ai-post" data-mode="create" data-source="%1$d" data-lang="%2$s" data-context="list">%3$s</button>',
+					(int) $post_id,
+					esc_attr( $code ),
+					esc_html__( 'Create & translate with AI', 'wp-llm-ml' )
 				);
 			}
+			self::print_lang_menu(
+				'is-missing',
+				'+' . $label,
+				/* translators: %s: language */
+				sprintf( __( 'Create %s translation', 'wp-llm-ml' ), $lang['name'] ),
+				$items,
+				$code
+			);
 		}
-		echo '</span>';
+		echo '</span></div>';
+	}
+
+	/**
+	 * One language badge with its menu (a <details> element: works without
+	 * JavaScript and with the keyboard).
+	 *
+	 * @param string   $class Badge state class.
+	 * @param string   $label Badge text.
+	 * @param string   $title Accessible description.
+	 * @param string[] $items Menu entries (HTML, already escaped).
+	 * @param string   $code  Language code.
+	 */
+	private static function print_lang_menu( $class, $label, $title, array $items, $code ) {
+		printf(
+			'<details class="wpllmml-lang-menu" data-lang="%1$s"><summary class="wpllmml-lang %2$s" title="%3$s" aria-label="%3$s">%4$s</summary><div class="wpllmml-lang-menu__items" role="menu">%5$s</div></details>',
+			esc_attr( $code ),
+			esc_attr( $class ),
+			esc_attr( $title ),
+			esc_html( $label ),
+			implode( '', $items ) // phpcs:ignore WordPress.Security.EscapeOutput -- escaped above.
+		);
 	}
 
 	/**
@@ -1373,8 +1443,15 @@ class Admin {
 		$status = Job::status( $post_id, $token );
 		if ( 'done' === $status['status'] ) {
 			Job::clear( $post_id );
-			self::store_flash( array( 'wpllmml_msg' => rawurlencode( __( 'Translated with AI. Please review the text before publishing.', 'wp-llm-ml' ) ) ) );
+			// From the editor the page reloads into the translation with a notice;
+			// from a post list the row is updated in place.
+			if ( ! isset( $_POST['context'] ) || 'list' !== $_POST['context'] ) {
+				self::store_flash( array( 'wpllmml_msg' => rawurlencode( __( 'Translated with AI. Please review the text before publishing.', 'wp-llm-ml' ) ) ) );
+			}
 			$status['redirect'] = (string) get_edit_post_link( $post_id, 'raw' );
+			$status['edit']     = (string) get_edit_post_link( $post_id, 'raw' );
+			$status['editor']   = self::editor_url( $post_id );
+			$status['preview']  = (string) get_preview_post_link( $post_id );
 		}
 		wp_send_json_success( $status );
 	}

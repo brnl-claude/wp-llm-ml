@@ -1,10 +1,12 @@
 """Prints a release's notes: the changelog entries that are new since the commit the previous release was built from,
 followed by how to install or update.
 
-Usage: release_notes.py [previous-commit] [this-commit]. Without a previous commit (or when git can't find it), the
+Usage: release_notes.py [--json] [previous-commit] [this-commit]. With --json only the new entries are printed, as a
+JSON list. Without a previous commit (or when git can't find it), the
 newest section is used; without this commit, the changelog as checked out. "## " starts a section, "- " an entry,
 indented lines continue it. (Same approach as imgcraft's .github/scripts/release_notes.py.)
 """
+import json
 import re
 import subprocess
 import sys
@@ -53,19 +55,25 @@ def changelog_at(commit):
 
 
 def main():
-    this_commit = sys.argv[2] if len(sys.argv) > 2 else None
+    args = [a for a in sys.argv[1:] if a != "--json"]
+    as_json = "--json" in sys.argv[1:]
+    this_commit = args[1] if len(args) > 1 else None
     if this_commit:
         text = changelog_at(this_commit) or ""
     else:
         with open(CHANGELOG, encoding="utf-8") as f:
             text = f.read()
     current = sections(text)
-    previous = changelog_at(sys.argv[1] if len(sys.argv) > 1 else None)
+    previous = changelog_at(args[0] if args else None)
     if previous is None:
         new = current[0] if current else []
     else:
         seen = {entry for section in sections(previous) for entry in section}
         new = [entry for section in current for entry in section if entry not in seen]
+    if as_json:
+        # For the plugin's "what's new" notice (bin/build-zip.sh puts it in the zip).
+        print(json.dumps(new, ensure_ascii=False))
+        return
     if new:
         print("Nieuw:\n")
         print("\n".join(f"- {without_mentions(entry)}" for entry in new))
