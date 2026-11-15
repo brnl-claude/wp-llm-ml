@@ -43,6 +43,8 @@ zelf instelt.
    - *Switcher in menu*: **Primary Menu** (GeneratePress). Tip: "Language code (NL)" is compacter in het menu.
 4. Pagina's → kolom **Languages** → klik `+NL` bij een pagina en kies "Create translation (copy) and open
    Elementor" of "Create & translate with AI" → controleer in Elementor → publiceer.
+   Meerdere tegelijk: vink pagina's aan → **Bulkacties** → "Translate into all languages with AI" (twee
+   tegelijk, als concept; bestaande vertalingen worden overgeslagen) of "Create … translation (copy)".
 5. Optioneel AI: tab **AI** → model kiezen. Zet de sleutel bij voorkeur in `wp-config.php`:
    ```php
    define( 'WPLLMML_AI_API_KEY', 'hyai-rt-…' );
@@ -80,11 +82,12 @@ tests/package.sh        # bouwt de zip, installeert hem in een verse site en tes
 bin/build-zip.sh        # alleen de zip bouwen → dist/wp-llm-ml.zip
 ```
 
-Zes suites (278 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
+Zes suites (304 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
 queries), HTTP (routing, redirects, hreflang, menu's, switcher, links, lijsten, REST, sitemaps),
 AI (tegen een nep-OpenAI-server: Elementor-teksten, repeaters, Yoast-velden, spellingscontrole, Abilities),
 sync (layout volgt Engels: nieuw/gewijzigd/verwijderd/verplaatst, lokale verschillen, zonder AI, zonder historie),
-browser (Playwright in de echte Elementor-editor: bovenbalk, wisselen, sync, `+RO` met AI; draait als
+browser (Playwright in de echte Elementor-editor: bovenbalk, wisselen, sync, `+RO` met AI; bulkvertalen
+in het paginaoverzicht; zonder WP-Cron, zoals op servers waar die niet draait; draait als
 Playwright er is, `WPLLMML_BROWSER=1` maakt het verplicht) en package (zip installeren in een verse site,
 activeren, updaten via de WordPress-upgrader).
 Testversies: WordPress 7.1.4, Elementor 4.2.2, Yoast SEO 28.2, GeneratePress 3.6.1, PHP 8.3. Met

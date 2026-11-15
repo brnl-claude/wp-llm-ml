@@ -316,6 +316,45 @@ if ( $site ) {
 	check( 'WPLLMML_SITE_URL set for HTTP checks', false );
 }
 
+section( 'Bulk translation: what gets translated' );
+$bulk_a  = wp_insert_post( array( 'post_type' => 'page', 'post_status' => 'publish', 'post_title' => 'Bulk A' ) );
+$bulk_b  = wp_insert_post( array( 'post_type' => 'page', 'post_status' => 'publish', 'post_title' => 'Bulk B' ) );
+$bulk_nl = Duplicator::create( $bulk_b, 'nl' );
+$plan    = WPLLMML\Admin\Admin::bulk_plan( array( $gestalt, $bulk_a, $bulk_nl, $bulk_b ), 'all' );
+$pairs   = array_map(
+	static function ( $task ) {
+		return $task['source'] . ':' . $task['lang'];
+	},
+	$plan['tasks']
+);
+check( 'missing languages only, from the default-language page, once per group', array( $bulk_a . ':nl', $bulk_a . ':ro', $bulk_b . ':ro' ) === $pairs, $pairs );
+check( 'existing translations counted as skipped', 3 === $plan['skipped'], $plan['skipped'] );
+check( 'titles for the progress panel', 'Bulk A' === $plan['tasks'][0]['title'] && 'Nederlands' === $plan['tasks'][0]['language'], $plan['tasks'][0] );
+$plan = WPLLMML\Admin\Admin::bulk_plan( array( $bulk_a ), 'ro' );
+check( 'one language', 1 === count( $plan['tasks'] ) && 'ro' === $plan['tasks'][0]['lang'] );
+check( 'unknown language: nothing', array() === WPLLMML\Admin\Admin::bulk_plan( array( $bulk_a ), 'xx' )['tasks'] );
+
+section( 'Bulk action "Create … translation (copy)"' );
+$admin    = new WPLLMML\Admin\Admin( WPLLMML\Plugin::instance()->router );
+$redirect = $admin->handle_bulk_action( 'edit.php?post_type=page', 'wpllmml_copy_all', array( $bulk_a, $bulk_nl ) );
+Translations::flush();
+check( 'drafts created', Translations::get_translation( $bulk_a, 'nl' ) && Translations::get_translation( $bulk_a, 'ro' ) && Translations::get_translation( $bulk_b, 'ro' ) );
+check( 'as drafts', 'draft' === get_post_status( Translations::get_translation( $bulk_a, 'ro' ) ) );
+$flash = get_transient( 'wpllmml_flash_' . get_current_user_id() );
+check( 'result message', is_array( $flash ) && false !== strpos( $flash[0][1], '3 draft translations created; 1 already existed' ), $flash );
+check( 'back to the list', 'edit.php?post_type=page' === $redirect );
+$admin->handle_bulk_action( 'edit.php', 'wpllmml_ai_nl', array( $bulk_a ) );
+$flash = get_transient( 'wpllmml_flash_' . get_current_user_id() );
+check( 'AI without JavaScript: explained', is_array( $flash ) && 'error' === $flash[0][0] );
+check( 'other bulk actions untouched', 'x' === $admin->handle_bulk_action( 'x', 'trash', array( $bulk_a ) ) );
+delete_transient( 'wpllmml_flash_' . get_current_user_id() );
+foreach ( array( $bulk_a, $bulk_b ) as $bulk_id ) {
+	foreach ( Translations::get_translations( $bulk_id ) as $bulk_tid ) {
+		wp_delete_post( $bulk_tid, true );
+	}
+}
+Translations::flush();
+
 // Publish the ro translation for a visual check.
 wp_update_post( array( 'ID' => $ro, 'post_status' => 'publish' ) );
 echo "\nRomanian page: " . get_permalink( $ro ) . "\n";

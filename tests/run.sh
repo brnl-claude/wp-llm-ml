@@ -36,6 +36,7 @@ if [ "${WPLLMML_BROWSER:-auto}" != 0 ] && ( cd "$REPO" && node -e "require('play
 	# Without WP-Cron, as on hosts where it does not run: the editor starts the sync.
 	mkdir -p "$WORK/site/wp-content/mu-plugins" && cp "$REPO/tests/fixtures/no-cron.php" "$WORK/site/wp-content/mu-plugins/"
 	node "$REPO/tests/browser/elementor-switcher.js" "http://localhost:$PORT" "$WORK/ids.json" "${WPLLMML_SHOTS:-}" || status=1
+	node "$REPO/tests/browser/bulk-translate.js" "http://localhost:$PORT" "${WPLLMML_SHOTS:-}" || status=1
 elif [ "${WPLLMML_BROWSER:-auto}" = 1 ]; then
 	echo "== Browser tests: Playwright not found (npm install playwright)"; status=1
 fi
