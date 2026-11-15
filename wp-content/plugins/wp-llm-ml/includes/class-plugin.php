@@ -75,8 +75,10 @@ final class Plugin {
 		( new Rest( $this->router ) )->boot();
 		( new Abilities() )->boot();
 		( new Updater() )->boot();
+		( new Sync() )->boot();
 
 		( new Integrations\Elementor() )->boot();
+		( new Integrations\Elementor_Editor() )->boot();
 		( new Integrations\Generatepress( $this->router, $this->links ) )->boot();
 		( new Integrations\Yoast( $this->links ) )->boot();
 

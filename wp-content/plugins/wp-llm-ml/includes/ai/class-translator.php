@@ -264,7 +264,9 @@ class Translator {
 			// Same layout and fields as the source, so the texts land in the right places.
 			$this->refresh_from_source( $source, $post_id );
 		}
-		$saved = Fields::save( $post_id, $items );
+		\WPLLMML\Sync::$writing = true;
+		$saved                    = Fields::save( $post_id, $items );
+		\WPLLMML\Sync::$writing = false;
 		if ( is_wp_error( $saved ) ) {
 			return $saved;
 		}
@@ -283,6 +285,10 @@ class Translator {
 			}
 		}
 		update_post_meta( $post_id, '_wpllmml_ai_translated', gmdate( 'c' ) );
+		if ( $source ) {
+			\WPLLMML\Sync::set_base( $post_id, $source );
+			delete_post_meta( $post_id, \WPLLMML\Sync::META_REVIEW );
+		}
 		do_action( 'wpllmml_post_translated', $post_id, $from, $to );
 		return true;
 	}

@@ -46,7 +46,15 @@ jobs:
       - name: PHP syntax
         run: find wp-content/plugins/wp-llm-ml -name '*.php' -print0 | xargs -0 -n1 php -l > /dev/null
 
+      # Chromium for the browser test of the Elementor editor (top-bar language switcher).
+      - name: Playwright
+        run: |
+          npm install --no-save --no-package-lock playwright@1.63.0
+          npx playwright install --with-deps chromium
+
       - name: Integration tests (WordPress + GeneratePress + Elementor + Yoast)
+        env:
+          WPLLMML_BROWSER: '1'
         run: tests/run.sh "$RUNNER_TEMP/wpllmml"
 
       # Builds dist/wp-llm-ml.zip with the version above, installs it in a fresh WordPress and

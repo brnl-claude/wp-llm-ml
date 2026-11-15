@@ -73,3 +73,8 @@
 .wpllmml-ai-job.is-compact .spinner { width: 16px; height: 16px; flex-basis: 16px; background-size: 16px 16px; }
 .wpllmml-update-notice__list { margin: .2em 0 .6em 1.4em; list-style: disc; }
 .wpllmml-update-notice__list li { margin: .25em 0; }
+/* Layout sync: review dot and "updating" state */
+.wpllmml-lang.has-review { position: relative; }
+.wpllmml-lang.has-review::after { content: ""; position: absolute; top: -4px; right: -4px; width: 8px; height: 8px; border-radius: 50%; background: #d63638; box-shadow: 0 0 0 2px #fff; }
+.wpllmml-lang.is-syncing { animation: wpllmml-pulse 1.2s ease-in-out infinite; }
+.wpllmml-lang-menu__note { max-width: 22em; padding: 6px 12px 8px; margin-bottom: 4px; border-bottom: 1px solid #f0f0f1; color: #50575e; font-size: 12px; line-height: 1.45; white-space: normal; }

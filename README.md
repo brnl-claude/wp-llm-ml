@@ -15,6 +15,8 @@ zelf instelt.
 |---|---|
 | **Talen & URL's** | Standaardtaal houdt de huidige URL's (`/gestalt-therapy/`); andere talen krijgen een prefix (`/nl/…`, `/ro/…`). Vertaalde slugs (`/nl/gestalt-therapie/`) of dezelfde slug (`/nl/reiki/`) — beide kunnen. |
 | **Inhoud** | Eén pagina per taal, gekoppeld als vertaling. "Vertaling maken" kopieert de pagina als concept, inclusief Elementor-layout, pagina-instellingen, GeneratePress-instellingen en Yoast-velden. Je vertaalt daarna gewoon in Elementor. |
+| **Layout volgt Engels** | Sla je de Engelse Elementor-pagina op, dan nemen de vertalingen op de achtergrond de opbouw, volgorde en stijl over (elementen gekoppeld via hun Elementor-id, drieweg-vergelijking met de vorige stand). Vertaalde teksten blijven; nieuwe/gewijzigde teksten gaan in één AI-verzoek en staan direct live, met een review-stip. Bewuste verschillen per taal (formulier-shortcode, afbeelding, link, blokken alleen in de vertaling) blijven. Per vertaling uit te zetten ("Keep its own layout"). |
+| **Elementor-bovenbalk** | EN · NL · RO naast desktop/tablet/mobiel: wisselen zonder herladen, `+RO` maakt een vertaling (AI of kopie). Gebouwd op Elementors editor-pakketten; ontbreken die in een toekomstige versie, dan blijft *Pagina-instellingen → Translations* werken. Een wekelijkse CI-run test tegen de nieuwste Elementor. |
 | **Browserdetectie** | Bezoeker met NL-browser die op de Engelse homepage binnenkomt → één keer naar `/nl/`. Op andere pagina's een kleine balk "Deze pagina is ook beschikbaar in het Nederlands". Gekozen taal wordt onthouden (functionele cookie `wpllmml_lang`). Draait in de browser, dus werkt met page-caching; zoekmachines worden nooit doorgestuurd. |
 | **Taalwisselaar** | Automatisch in het GeneratePress-menu (dropdown of naast elkaar), als Elementor-widget, klassieke widget of shortcode `[wpllmml_switcher]`. |
 | **Menu's** | Eén menu voor alle talen: items wijzen automatisch naar de vertaling en tonen de vertaalde titel; eigen labels zijn vertaalbaar. |
@@ -57,7 +59,8 @@ nieuwe zip uploaden en "Huidige vervangen" kiezen. Update-check uitzetten:
 
 ## Vertaalworkflow met Elementor
 
-- In Elementor: **Pagina-instellingen → Translations** toont alle taalversies met "Edit with Elementor" of "Create translation".
+- In Elementor: **bovenbalk EN · NL · RO** (naast desktop/tablet/mobiel) om te wisselen of een vertaling te maken; een stip betekent "automatisch bijgewerkt, even nalezen". Ook **Pagina-instellingen → Translations** toont alle taalversies.
+- Layout aanpassen doe je op de Engelse pagina; na opslaan volgen de vertalingen vanzelf. Teksten pas je per taal aan.
 - Op de site (ingelogd): de adminbalk toont de taal van de pagina met links naar de andere versies.
 - Formulieren (Forminator/MailPoet): maak per taal een formulier en plaats dat in de vertaalde pagina, of zet widgets per taal.
 
@@ -77,11 +80,16 @@ tests/package.sh        # bouwt de zip, installeert hem in een verse site en tes
 bin/build-zip.sh        # alleen de zip bouwen → dist/wp-llm-ml.zip
 ```
 
-Vier suites (193 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
-queries), HTTP (routing, redirects, hreflang, menu's, switcher, links, lijsten, REST, sitemaps) en
-AI (tegen een nep-OpenAI-server: Elementor-teksten, repeaters, Yoast-velden, spellingscontrole, Abilities)
-en package (zip installeren in een verse site, activeren, updaten via de WordPress-upgrader).
-Testversies: WordPress 7.1.4, Elementor 4.2.2, Yoast SEO 28.2, GeneratePress 3.6.1, PHP 8.3.
+Zes suites (259 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
+queries), HTTP (routing, redirects, hreflang, menu's, switcher, links, lijsten, REST, sitemaps),
+AI (tegen een nep-OpenAI-server: Elementor-teksten, repeaters, Yoast-velden, spellingscontrole, Abilities),
+sync (layout volgt Engels: nieuw/gewijzigd/verwijderd/verplaatst, lokale verschillen, zonder AI, zonder historie),
+browser (Playwright in de echte Elementor-editor: bovenbalk, wisselen, sync, `+RO` met AI; draait als
+Playwright er is, `WPLLMML_BROWSER=1` maakt het verplicht) en package (zip installeren in een verse site,
+activeren, updaten via de WordPress-upgrader).
+Testversies: WordPress 7.1.4, Elementor 4.2.2, Yoast SEO 28.2, GeneratePress 3.6.1, PHP 8.3. Met
+`WP_VERSION=latest ELEMENTOR_VERSION=latest YOAST_VERSION=latest tests/run.sh` tegen de nieuwste releases;
+dat doet [`compat.yml`](.github/workflows/compat.yml) elke maandag (en op verzoek).
 
 ### Releases
 
@@ -112,11 +120,13 @@ wp-content/plugins/wp-llm-ml/
   includes/class-seo.php        hreflang/og:locale
   includes/class-strings.php    vertaalbare losse teksten
   includes/class-rest.php, class-abilities.php   REST + Abilities API
-  includes/integrations/        Elementor, GeneratePress, Yoast
+  includes/class-sync.php       layout van de standaardtaal → vertalingen (Elementor)
+  includes/integrations/        Elementor (+ bovenbalk-wisselaar), GeneratePress, Yoast
   includes/ai/                  OpenAI-compatibele client, vertaler, spellingscontrole
   includes/admin/               instellingen, kolommen, metabox, adminbalk
   includes/class-updater.php    updates via GitHub Releases
 .github/workflows/plugin.yml    tests bij elke PR, release bij elke push naar main
+.github/workflows/compat.yml    wekelijks: tests tegen de nieuwste WordPress/Elementor/Yoast
 bin/                            build-zip, version
 version.properties, CHANGELOG.md  versie (minor) en release-notes
 ```

@@ -124,6 +124,7 @@ class Duplicator {
 
 		self::adopt_children( $source, $new_id, $code );
 		Translations::flush();
+		Sync::set_base( $new_id, $source->ID );
 
 		do_action( 'wpllmml_translation_created', $new_id, $source->ID, $code );
 		return $new_id;

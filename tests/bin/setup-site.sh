@@ -19,18 +19,28 @@ SQLITE_VERSION="${SQLITE_VERSION:-3.1.3}"
 
 mkdir -p "$TARGET/dl"
 cd "$TARGET/dl"
-fetch() { [ -f "$2" ] || curl -sSfL -o "$2" "$1"; }
-fetch "https://wordpress.org/wordpress-${WP_VERSION}.zip" wordpress.zip
-fetch "https://downloads.wordpress.org/plugin/sqlite-database-integration.${SQLITE_VERSION}.zip" sqlite.zip
-fetch "https://downloads.wordpress.org/plugin/elementor.${ELEMENTOR_VERSION}.zip" elementor.zip
-fetch "https://downloads.wordpress.org/plugin/wordpress-seo.${YOAST_VERSION}.zip" yoast.zip
-fetch "https://downloads.wordpress.org/theme/generatepress.${GP_VERSION}.zip" generatepress.zip
+# Downloads are cached per version. "latest" (WordPress, Elementor, Yoast SEO)
+# means the newest stable release and is always downloaded again; the weekly
+# compatibility run uses it.
+fetch() { if [ -f "$2" ] && [ "${3:-}" != latest ]; then return 0; fi; curl -sSfL -o "$2" "$1"; }
+plugin() { if [ "$2" = latest ]; then echo "https://downloads.wordpress.org/plugin/$1.latest-stable.zip"; else echo "https://downloads.wordpress.org/plugin/$1.$2.zip"; fi; }
+if [ "$WP_VERSION" = latest ]; then
+	fetch "https://wordpress.org/latest.zip" wordpress-latest.zip latest
+else
+	fetch "https://wordpress.org/wordpress-${WP_VERSION}.zip" "wordpress-${WP_VERSION}.zip"
+fi
+fetch "$(plugin sqlite-database-integration "$SQLITE_VERSION")" "sqlite-${SQLITE_VERSION}.zip" "$SQLITE_VERSION"
+fetch "$(plugin elementor "$ELEMENTOR_VERSION")" "elementor-${ELEMENTOR_VERSION}.zip" "$ELEMENTOR_VERSION"
+fetch "$(plugin wordpress-seo "$YOAST_VERSION")" "yoast-${YOAST_VERSION}.zip" "$YOAST_VERSION"
+fetch "https://downloads.wordpress.org/theme/generatepress.${GP_VERSION}.zip" "generatepress-${GP_VERSION}.zip"
 
 cd "$TARGET"
 rm -rf site
-unzip -q dl/wordpress.zip && mv wordpress site
-( cd site/wp-content/plugins && unzip -q ../../../dl/sqlite.zip && unzip -q ../../../dl/elementor.zip && unzip -q ../../../dl/yoast.zip )
-( cd site/wp-content/themes && unzip -q ../../../dl/generatepress.zip )
+unzip -q "dl/wordpress-${WP_VERSION}.zip" && mv wordpress site
+( cd site/wp-content/plugins && unzip -q "../../../dl/sqlite-${SQLITE_VERSION}.zip" && unzip -q "../../../dl/elementor-${ELEMENTOR_VERSION}.zip" && unzip -q "../../../dl/yoast-${YOAST_VERSION}.zip" )
+( cd site/wp-content/themes && unzip -q "../../../dl/generatepress-${GP_VERSION}.zip" )
+version_of() { grep -m1 -oE "$2" "$1" | grep -oE "[0-9][0-9.]*[0-9]" | head -1; }
+echo "Stack: WordPress $(version_of site/wp-includes/version.php "wp_version = '[^']+'"), Elementor $(version_of site/wp-content/plugins/elementor/elementor.php 'Version: .*'), Yoast SEO $(version_of site/wp-content/plugins/wordpress-seo/wp-seo.php 'Version: .*'), GeneratePress ${GP_VERSION}"
 # Development: symlink the plugin. Package test (PLUGIN_ZIP set): leave it
 # out, the test installs it from the zip like a site owner would.
 if [ -z "${PLUGIN_ZIP:-}" ]; then
