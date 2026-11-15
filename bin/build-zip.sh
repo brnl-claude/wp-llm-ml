@@ -19,6 +19,12 @@ sed -i.bak -e "s/^ \* Version:[[:space:]]*.*/ * Version:           $VERSION/" \
 	-e "s/^define( 'WPLLMML_VERSION', '[^']*' );/define( 'WPLLMML_VERSION', '$VERSION' );/" "$MAIN"
 sed -i.bak -e "s/^Stable tag:[[:space:]]*.*/Stable tag: $VERSION/" "$STAGE/wp-llm-ml/readme.txt"
 find "$STAGE" -name '*.bak' -delete
+
+# What's new in this version, for the one-time notice after an update: the
+# changelog entries added since the previous release (WPLLMML_PREVIOUS, the
+# commit it was built from; CI sets it) or else the newest changelog section.
+entries=$(cd "$REPO" && python3 .github/scripts/release_notes.py --json "${WPLLMML_PREVIOUS:-}" 2>/dev/null || echo '[]')
+printf '{"version":"%s","entries":%s}\n' "$VERSION" "$entries" > "$STAGE/wp-llm-ml/whats-new.json"
 grep -q "^ \* Version:           $VERSION$" "$MAIN" && grep -q "'WPLLMML_VERSION', '$VERSION'" "$MAIN" \
 	|| { echo "Could not set the version in $MAIN" >&2; exit 1; }
 

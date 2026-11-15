@@ -31,10 +31,17 @@ jobs:
       # commits on main since the one that last changed that file. Each of those commits was a
       # release, so patch goes up by one per release and starts at 0 when minor is raised.
       - name: Work out the version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           version=$(bin/version.sh)
           echo "WPLLMML_RELEASE=$version" >> "$GITHUB_ENV"
           echo "Version $version"
+          # The commit the latest release was built from: what's new is measured from there
+          # (release notes, and the plugin's one-time "updated" notice via bin/build-zip.sh).
+          previous=$(gh release view --json targetCommitish --jq .targetCommitish 2>/dev/null || true)
+          echo "WPLLMML_PREVIOUS=$previous" >> "$GITHUB_ENV"
+          echo "Previous release built from: ${previous:-none}"
 
       - name: PHP syntax
         run: find wp-content/plugins/wp-llm-ml -name '*.php' -print0 | xargs -0 -n1 php -l > /dev/null
@@ -55,8 +62,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # The changelog entries added since the release before this one.
-          previous=$(gh release view --json targetCommitish --jq .targetCommitish 2>/dev/null || true)
-          python3 .github/scripts/release_notes.py "$previous" > notes.md
+          python3 .github/scripts/release_notes.py "$WPLLMML_PREVIOUS" > notes.md
           printf '\nGebouwd van %s.\n' "$GITHUB_SHA" >> notes.md
           gh release create "v$WPLLMML_RELEASE" dist/wp-llm-ml.zip \
             --title "LLM Multilingual $WPLLMML_RELEASE" \

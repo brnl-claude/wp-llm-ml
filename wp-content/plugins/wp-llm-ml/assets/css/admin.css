@@ -18,7 +18,7 @@
 .wpllmml-lang.is-future,
 .wpllmml-lang.is-private { background: #fcf9e8; border-color: #dba617; color: #614a00; }
 .wpllmml-lang.is-missing { border-style: dashed; color: #50575e; }
-.column-wpllmml { width: 9em; }
+.column-wpllmml { width: 13em; }
 .wpllmml-box-list { margin: 0 0 1em; }
 .wpllmml-box-list li { margin-bottom: .4em; }
 .wpllmml-status { color: #646970; }
@@ -53,3 +53,23 @@
 .wpllmml-ai-progress [hidden] { display: none !important; }
 .wpllmml-ai-job .spinner:not(.is-active),
 .wpllmml-ai-progress .spinner:not(.is-active) { display: none; }
+/* Language menus in post lists */
+.wpllmml-lang-menu { position: relative; display: inline-block; }
+.wpllmml-lang-menu > summary { list-style: none; cursor: pointer; }
+.wpllmml-lang-menu > summary::-webkit-details-marker { display: none; }
+.wpllmml-lang-menu > summary:focus-visible { outline: 2px solid #2271b1; outline-offset: 1px; }
+.wpllmml-lang-menu__items { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; min-width: 16em; padding: 4px 0; background: #fff; border: 1px solid #c3c4c7; border-radius: 4px; box-shadow: 0 3px 12px rgba(0, 0, 0, .15); }
+.wpllmml-lang-menu__items a,
+.wpllmml-lang-menu__items button { display: block; width: 100%; padding: 6px 12px; border: 0; background: none; color: #2271b1; font: inherit; font-size: 13px; line-height: 1.4; text-align: left; text-decoration: none; white-space: nowrap; cursor: pointer; }
+.wpllmml-lang-menu__items a:hover,
+.wpllmml-lang-menu__items button:hover,
+.wpllmml-lang-menu__items a:focus,
+.wpllmml-lang-menu__items button:focus { background: #f0f6fc; color: #135e96; }
+.wpllmml-lang.is-working { animation: wpllmml-pulse 1.2s ease-in-out infinite; border-style: solid; border-color: #2271b1; }
+@keyframes wpllmml-pulse { 50% { opacity: .45; } }
+.wpllmml-ai-job.is-compact { margin: .35em 0 0; font-size: 12px; }
+.wpllmml-ai-job.is-compact .wpllmml-ai-job__line { margin-top: .2em; }
+.wpllmml-ai-job.is-compact progress { height: .5em; }
+.wpllmml-ai-job.is-compact .spinner { width: 16px; height: 16px; flex-basis: 16px; background-size: 16px 16px; }
+.wpllmml-update-notice__list { margin: .2em 0 .6em 1.4em; list-style: disc; }
+.wpllmml-update-notice__list li { margin: .25em 0; }

@@ -25,7 +25,9 @@ php -r '
 	$s = $z->getFromName($f);
 	$s = preg_replace("/^ \* Version:\s+\S+/m", " * Version:           $v", $s);
 	$s = preg_replace("/define\( .WPLLMML_VERSION., .[^\x27]+. \)/", "define( \x27WPLLMML_VERSION\x27, \x27$v\x27 )", $s);
-	$z->addFromString($f, $s); $z->close();
+	$z->addFromString($f, $s);
+	$z->addFromString("wp-llm-ml/whats-new.json", json_encode(array("version" => $v, "entries" => array("Test entry with `code` and **bold**", "Second entry"))));
+	$z->close();
 ' "$ZIP" "$WORK/next.zip" "$NEXT_VERSION"
 
 PLUGIN_ZIP="$ZIP" "$REPO/tests/bin/setup-site.sh" "$WORK" "$PORT"
