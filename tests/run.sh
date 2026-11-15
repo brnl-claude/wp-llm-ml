@@ -26,6 +26,7 @@ echo "== Model tests";  WPLLMML_IDS_FILE="$WORK/ids.json" php "$REPO/tests/bin/w
 echo "== HTTP tests";   php "$REPO/tests/integration/test-http.php" "http://localhost:$PORT" || status=1
 echo "== AI tests";     WPLLMML_MOCK_AI="http://localhost:$AI_PORT/v1" WPLLMML_SITE_URL="http://localhost:$PORT" php "$REPO/tests/bin/wp-eval.php" "$WORK/site" "$REPO/tests/integration/test-ai.php" || status=1
 echo "== Sync tests";   WPLLMML_MOCK_AI="http://localhost:$AI_PORT/v1" php "$REPO/tests/bin/wp-eval.php" "$WORK/site" "$REPO/tests/integration/test-sync.php" || status=1
+echo "== Forms tests";  WPLLMML_MOCK_AI="http://localhost:$AI_PORT/v1" WPLLMML_SITE_URL="http://localhost:$PORT" php "$REPO/tests/bin/wp-eval.php" "$WORK/site" "$REPO/tests/integration/test-forms.php" || status=1
 
 # Browser test of the Elementor editor (top-bar language switcher + sync).
 # Runs when Playwright is installed (CI installs it), or is forced with
@@ -39,6 +40,8 @@ if [ "${WPLLMML_BROWSER:-auto}" != 0 ] && ( cd "$REPO" && node -e "require('play
 	node "$REPO/tests/browser/bulk-translate.js" "http://localhost:$PORT" "${WPLLMML_SHOTS:-}" || status=1
 	php "$REPO/tests/bin/wp-eval.php" "$WORK/site" "$REPO/tests/fixtures/spell-typo.php" || status=1
 	node "$REPO/tests/browser/spellcheck.js" "http://localhost:$PORT" "${WPLLMML_SHOTS:-}" || status=1
+	php "$REPO/tests/bin/wp-eval.php" "$WORK/site" "$REPO/tests/fixtures/forms-page.php" || status=1
+	node "$REPO/tests/browser/forms.js" "http://localhost:$PORT" "${WPLLMML_SHOTS:-}" || status=1
 elif [ "${WPLLMML_BROWSER:-auto}" = 1 ]; then
 	echo "== Browser tests: Playwright not found (npm install playwright)"; status=1
 fi

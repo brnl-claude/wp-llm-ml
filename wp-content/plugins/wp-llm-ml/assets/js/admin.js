@@ -839,6 +839,55 @@
 		openSpell( button.getAttribute( 'data-post' ), !! button.getAttribute( 'data-editor' ) );
 	} );
 
+	// Forms tab: translate a Forminator form with AI. The server answers at
+	// once and translates in the background; this page polls for the result.
+	document.addEventListener( 'click', function ( e ) {
+		var button = e.target.closest && e.target.closest( '.wpllmml-form-ai' );
+		if ( ! button ) {
+			return;
+		}
+		e.preventDefault();
+		if ( button.getAttribute( 'data-again' ) && ! window.confirm( cfg.i18n.formAgain ) ) { // eslint-disable-line no-alert
+			return;
+		}
+		var cell = button.closest( '.wpllmml-forms__cell' );
+		var data = { form: button.getAttribute( 'data-form' ), lang: button.getAttribute( 'data-lang' ) };
+		var spinner = el( 'span', '', 'spinner is-active' );
+		var status = el( 'span', cfg.i18n.formWorking, 'wpllmml-forms__status' );
+		var since = Date.now();
+		button.hidden = true;
+		cell.appendChild( spinner );
+		cell.appendChild( status );
+		function fail( message ) {
+			spinner.remove();
+			status.textContent = format( cfg.i18n.stopped, message ) + ' ';
+			button.hidden = false;
+		}
+		spellCall( 'wpllmml_form_start', data ).then( function ( d ) {
+			data.token = d.token;
+			( function poll() {
+				window.setTimeout( function () {
+					spellCall( 'wpllmml_form_status', data ).then( function ( s ) {
+						if ( 'running' === s.status ) {
+							status.textContent = format( cfg.i18n.formWorkingTime, clock( Math.round( ( Date.now() - since ) / 1000 ) ) );
+							poll();
+							return;
+						}
+						if ( 'done' !== s.status ) {
+							fail( s.message || cfg.i18n.error );
+							return;
+						}
+						cell.textContent = '';
+						cell.appendChild( link( s.edit, s.title ) );
+						cell.appendChild( el( 'span', ' ✓ ' + cfg.i18n.formDone, 'wpllmml-forms__done' ) );
+					} ).catch( poll );
+				}, 2000 );
+			}() );
+		} ).catch( function ( err ) {
+			fail( err.message );
+		} );
+	} );
+
 	// Layout sync (post lists): start an update that waits (WP-Cron does not
 	// run on every host) and follow it until it is done.
 	function watchSync( cell, source ) {

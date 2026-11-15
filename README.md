@@ -23,6 +23,7 @@ zelf instelt.
 | **Links in content** | Interne links (Elementor-knoppen, tekst, footer-widgets, copyright) wijzen automatisch naar de vertaalde pagina als die bestaat. |
 | **Overige teksten** | Sitetitel, tagline, menulabels, categorienamen, widgetteksten, GeneratePress-copyright: tab *Teksten*. Thema-/plugin-teksten komen uit de WordPress-taalpakketten (één klik om te installeren). |
 | **Widgets per taal** | Bijv. een Engels en een Nederlands MailPoet-formulier: tab *Widgets*. |
+| **Forminator** | Tab *Forms*: per formulier en taal een vertaalde kopie ("Create & translate with AI": labels, keuzes, knop, meldingen, e-mails; codes als `{name-1}` blijven). Pagina's houden het Engelse formulier; op /nl/ en /ro/ wordt automatisch de kopie getoond. Inzendingen komen per taal binnen. |
 | **SEO** | `<html lang>`, `hreflang` + `x-default`, canonical per taal, `og:locale` (+alternates), Yoast schema `inLanguage`, Yoast XML-sitemaps met alle talen én `xhtml:link`-alternates, RSS per taal. Blog, archieven, zoeken en vorige/volgende-links blijven binnen de taal. |
 | **AI-vriendelijk** | Volledig server-gerenderde vertaalde HTML (geen JavaScript-vertaling), REST API met `wpllmml`-veld en `?lang=nl`, `/wp-json/wpllmml/v1/languages`, en WordPress *Abilities* (`wp-llm-ml/list-languages`, `get-translations`, `create-translation`, `translate-text`) voor AI-agents/MCP. |
 | **AI-vertaling (optioneel)** | Via elke OpenAI-compatibele API, standaard [HostYourAI](https://hostyourai.com) (EU). Vertaalt titel, Elementor-teksten (ook repeaters zoals toggles/icon-lists), blokinhoud en Yoast-velden; HTML, links, iconen en namen blijven intact. "Create & translate with AI" of "Translate from English with AI". De hele pagina gaat in één verzoek naar de AI (context blijft behouden) en draait op de server op de achtergrond, dus geen gateway-timeouts; het scherm vraagt elke 2 s de status op. Stopt dat (annuleren, pagina verlaten), dan stopt de server ook en wordt er niets opgeslagen. Eén vertaling per pagina tegelijk. |
@@ -64,7 +65,8 @@ nieuwe zip uploaden en "Huidige vervangen" kiezen. Update-check uitzetten:
 - In Elementor: **bovenbalk EN · NL · RO** (naast desktop/tablet/mobiel) om te wisselen of een vertaling te maken; een stip betekent "automatisch bijgewerkt, even nalezen". Ook **Pagina-instellingen → Translations** toont alle taalversies.
 - Layout aanpassen doe je op de Engelse pagina; na opslaan volgen de vertalingen vanzelf. Teksten pas je per taal aan.
 - Op de site (ingelogd): de adminbalk toont de taal van de pagina met links naar de andere versies.
-- Formulieren (Forminator/MailPoet): maak per taal een formulier en plaats dat in de vertaalde pagina, of zet widgets per taal.
+- Forminator: Instellingen → Languages → **Forms** → "Create & translate with AI" per taal. De pagina's hoef je niet aan te passen; controleer de kopie in Forminator.
+- MailPoet-formulieren in widgets: maak per taal een formulier en zet de widgets per taal (tab *Widgets*).
 
 ## Bewust níet / bekende beperkingen
 
@@ -82,16 +84,17 @@ tests/package.sh        # bouwt de zip, installeert hem in een verse site en tes
 bin/build-zip.sh        # alleen de zip bouwen → dist/wp-llm-ml.zip
 ```
 
-Zes suites (343 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
+Zeven suites (385 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
 queries), HTTP (routing, redirects, hreflang, menu's, switcher, links, lijsten, REST, sitemaps),
 AI (tegen een nep-OpenAI-server: Elementor-teksten, repeaters, Yoast-velden, spellingscontrole, Abilities),
 sync (layout volgt Engels: nieuw/gewijzigd/verwijderd/verplaatst, lokale verschillen, zonder AI, zonder historie),
+forms (Forminator: kopie per taal, vertaalde teksten, codes, automatisch wisselen op /nl/),
 browser (Playwright in de echte Elementor-editor: bovenbalk, wisselen, sync, `+RO` met AI; bulkvertalen
-in het paginaoverzicht; spellingscontrole-venster; zonder WP-Cron, zoals op servers waar die niet draait; draait als
+in het paginaoverzicht; spellingscontrole-venster; Forms-tabblad; zonder WP-Cron, zoals op servers waar die niet draait; draait als
 Playwright er is, `WPLLMML_BROWSER=1` maakt het verplicht) en package (zip installeren in een verse site,
 activeren, updaten via de WordPress-upgrader).
-Testversies: WordPress 7.1.4, Elementor 4.2.2, Yoast SEO 28.2, GeneratePress 3.6.1, PHP 8.3. Met
-`WP_VERSION=latest ELEMENTOR_VERSION=latest YOAST_VERSION=latest tests/run.sh` tegen de nieuwste releases;
+Testversies: WordPress 7.1.4, Elementor 4.2.2, Yoast SEO 28.2, Forminator 1.58.4, GeneratePress 3.6.1, PHP 8.3. Met
+`WP_VERSION=latest ELEMENTOR_VERSION=latest YOAST_VERSION=latest FORMINATOR_VERSION=latest tests/run.sh` tegen de nieuwste releases;
 dat doet [`compat.yml`](.github/workflows/compat.yml) elke maandag (en op verzoek).
 
 ### Releases
@@ -124,12 +127,12 @@ wp-content/plugins/wp-llm-ml/
   includes/class-strings.php    vertaalbare losse teksten
   includes/class-rest.php, class-abilities.php   REST + Abilities API
   includes/class-sync.php       layout van de standaardtaal → vertalingen (Elementor)
-  includes/integrations/        Elementor (+ bovenbalk-wisselaar), GeneratePress, Yoast
+  includes/integrations/        Elementor (+ bovenbalk-wisselaar), GeneratePress, Yoast, Forminator
   includes/ai/                  OpenAI-compatibele client, vertaler, spellingscontrole
   includes/admin/               instellingen, kolommen, metabox, adminbalk
   includes/class-updater.php    updates via GitHub Releases
 .github/workflows/plugin.yml    tests bij elke PR, release bij elke push naar main
-.github/workflows/compat.yml    wekelijks: tests tegen de nieuwste WordPress/Elementor/Yoast
+.github/workflows/compat.yml    wekelijks: tests tegen de nieuwste WordPress/Elementor/Yoast/Forminator
 bin/                            build-zip, version
 version.properties, CHANGELOG.md  versie (minor) en release-notes
 ```

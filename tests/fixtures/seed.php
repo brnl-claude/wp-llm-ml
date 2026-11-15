@@ -22,7 +22,7 @@ wp_set_current_user( 1 );
 switch_theme( 'generatepress' );
 update_option( 'permalink_structure', '/%postname%/' );
 update_option( 'blogdescription', 'Therapy - Counselling - Coaching' );
-foreach ( array( 'elementor/elementor.php', 'wordpress-seo/wp-seo.php', 'wp-llm-ml/wp-llm-ml.php' ) as $plugin ) {
+foreach ( array( 'elementor/elementor.php', 'wordpress-seo/wp-seo.php', 'forminator/forminator.php', 'wp-llm-ml/wp-llm-ml.php' ) as $plugin ) {
 	if ( ! is_file( WP_PLUGIN_DIR . '/' . $plugin ) ) {
 		continue; // Package test: installed later from the zip.
 	}
