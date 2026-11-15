@@ -8,6 +8,9 @@
  *   "<CODE>:" (code taken from the system prompt); spell check: one finding
  *   for the word "Welcom" when present.
  * Requires "Authorization: Bearer test-key".
+ * A text containing [[slow]] makes the reply take 6 seconds; a request with
+ * several texts of which one contains [[split]] gets an unreadable reply.
+ * Each translation request is logged to <tmp>/wpllmml-mock-ai.log.
  * Also fakes GitHub's "latest release" API (/github/releases/latest) and
  * serves the zip named in WPLLMML_MOCK_ZIP, for the updater test.
  *
@@ -63,6 +66,16 @@ $content  = '';
 if ( false !== strpos( $system, 'professional translator' ) ) {
 	preg_match( '/ to [A-Za-z]+ \(([a-z_-]+)\)/', $system, $m );
 	$code    = strtoupper( $m[1] );
+	$joined  = implode( "\n", $user );
+	if ( false !== strpos( $joined, '[[slow]]' ) ) {
+		sleep( 6 ); // Lets tests stop a translation while the AI is still working.
+	}
+	if ( count( $user ) > 1 && false !== strpos( $joined, '[[split]]' ) ) {
+		// An answer with the wrong number of items, like a reply that was cut off.
+		$reply( 200, array( 'choices' => array( array( 'index' => 0, 'message' => array( 'role' => 'assistant', 'content' => '["only one"]' ) ) ) ) );
+		file_put_contents( sys_get_temp_dir() . '/wpllmml-mock-ai.log', 'translate ' . count( $user ) . "\n", FILE_APPEND );
+		return;
+	}
 	$out     = array_map(
 		static function ( $s ) use ( $code ) {
 			return $code . ':' . $s;
@@ -92,7 +105,7 @@ if ( false !== strpos( $system, 'professional translator' ) ) {
 	}
 	$content = '<think>checking…</think>' . json_encode( $found );
 }
-file_put_contents( sys_get_temp_dir() . '/wpllmml-mock-ai.log', $body['model'] . "\n", FILE_APPEND );
+file_put_contents( sys_get_temp_dir() . '/wpllmml-mock-ai.log', ( false !== strpos( $system, 'professional translator' ) ? 'translate ' . count( $user ) : 'other' ) . "\n", FILE_APPEND );
 $reply(
 	200,
 	array(

@@ -38,8 +38,18 @@
 .wpllmml-ai-progress { display: flex; align-items: center; gap: .6em; margin: .5em 0 1em; }
 .wpllmml-ai-progress[hidden] { display: none; }
 .wpllmml-ai-progress progress { width: 16em; height: 1em; }
-.wpllmml-ai-progress .spinner { float: none; margin: 0; }
+.wpllmml-ai-progress .spinner { float: none; margin: 0; flex: 0 0 20px; }
 .wpllmml-strings textarea.wpllmml-filled { background: #f0f6fc; border-color: #72aee6; }
 .wpllmml-busy-note { display: flex; align-items: center; gap: .3em; margin: .4em 0 0; color: #50575e; }
-.wpllmml-busy-note .spinner { float: none; margin: 0; }
+.wpllmml-busy-note .spinner { float: none; margin: 0; flex: 0 0 20px; }
 .wpllmml-is-busy { pointer-events: none; opacity: .6; }
+.wpllmml-ai-job { margin: .4em 0 .8em; }
+.wpllmml-ai-job progress { display: block; width: 100%; height: .8em; }
+.wpllmml-ai-job__line { display: flex; align-items: flex-start; gap: .4em; margin-top: .3em; color: #50575e; }
+.wpllmml-ai-job .spinner { float: none; margin: 0; flex: 0 0 20px; }
+.wpllmml-ai-job .button-small { margin-top: .3em; }
+.wpllmml-ai-job__actions { margin-top: .3em; }
+.wpllmml-ai-job [hidden],
+.wpllmml-ai-progress [hidden] { display: none !important; }
+.wpllmml-ai-job .spinner:not(.is-active),
+.wpllmml-ai-progress .spinner:not(.is-active) { display: none; }

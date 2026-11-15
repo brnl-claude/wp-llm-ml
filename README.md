@@ -23,7 +23,7 @@ zelf instelt.
 | **Widgets per taal** | Bijv. een Engels en een Nederlands MailPoet-formulier: tab *Widgets*. |
 | **SEO** | `<html lang>`, `hreflang` + `x-default`, canonical per taal, `og:locale` (+alternates), Yoast schema `inLanguage`, Yoast XML-sitemaps met alle talen én `xhtml:link`-alternates, RSS per taal. Blog, archieven, zoeken en vorige/volgende-links blijven binnen de taal. |
 | **AI-vriendelijk** | Volledig server-gerenderde vertaalde HTML (geen JavaScript-vertaling), REST API met `wpllmml`-veld en `?lang=nl`, `/wp-json/wpllmml/v1/languages`, en WordPress *Abilities* (`wp-llm-ml/list-languages`, `get-translations`, `create-translation`, `translate-text`) voor AI-agents/MCP. |
-| **AI-vertaling (optioneel)** | Via elke OpenAI-compatibele API, standaard [HostYourAI](https://hostyourai.com) (EU). Vertaalt titel, Elementor-teksten (ook repeaters zoals toggles/icon-lists), blokinhoud en Yoast-velden; HTML, links, iconen en namen blijven intact. "Maken & vertalen met AI" of "Vertalen vanuit English met AI". |
+| **AI-vertaling (optioneel)** | Via elke OpenAI-compatibele API, standaard [HostYourAI](https://hostyourai.com) (EU). Vertaalt titel, Elementor-teksten (ook repeaters zoals toggles/icon-lists), blokinhoud en Yoast-velden; HTML, links, iconen en namen blijven intact. "Create & translate with AI" of "Translate from English with AI". De hele pagina gaat in één verzoek naar de AI (context blijft behouden) en draait op de server op de achtergrond, dus geen gateway-timeouts; het scherm vraagt elke 2 s de status op. Stopt dat (annuleren, pagina verlaten), dan stopt de server ook en wordt er niets opgeslagen. Eén vertaling per pagina tegelijk. |
 | **Spellingscontrole (optioneel)** | "Spelling controleren met AI" in de editor: lijst met fouten + uitleg, per suggestie "Toepassen". |
 
 ## Installeren
@@ -76,7 +76,7 @@ tests/package.sh        # bouwt de zip, installeert hem in een verse site en tes
 bin/build-zip.sh        # alleen de zip bouwen → dist/wp-llm-ml.zip
 ```
 
-Vier suites (166 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
+Vier suites (187 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
 queries), HTTP (routing, redirects, hreflang, menu's, switcher, links, lijsten, REST, sitemaps) en
 AI (tegen een nep-OpenAI-server: Elementor-teksten, repeaters, Yoast-velden, spellingscontrole, Abilities)
 en package (zip installeren in een verse site, activeren, updaten via de WordPress-upgrader).

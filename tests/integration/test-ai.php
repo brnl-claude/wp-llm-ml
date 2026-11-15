@@ -9,6 +9,7 @@
 
 use WPLLMML\Ai\Client;
 use WPLLMML\Ai\Fields;
+use WPLLMML\Ai\Job;
 use WPLLMML\Ai\Spellcheck;
 use WPLLMML\Ai\Translator;
 use WPLLMML\Duplicator;
@@ -111,6 +112,84 @@ if ( function_exists( 'wp_get_ability' ) && wp_get_ability( 'wp-llm-ml/translate
 	check( 'list-languages ability', is_array( $langs ) && 3 === count( $langs ) );
 }
 
+section( 'A whole page goes to the AI in one request' );
+$mock_log = sys_get_temp_dir() . '/wpllmml-mock-ai.log';
+$calls    = static function () use ( $mock_log ) {
+	clearstatcache();
+	return is_file( $mock_log ) ? count( file( $mock_log ) ) : 0;
+};
+$long_src = wp_insert_post(
+	array(
+		'post_type'   => 'page',
+		'post_status' => 'publish',
+		'post_title'  => 'Long page',
+		'post_name'   => 'long-page',
+	)
+);
+$paras = '';
+for ( $n = 1; $n <= 12; $n++ ) {
+	$paras .= "<p>Paragraph {$n}: " . str_repeat( 'Gestalt therapy is about awareness. ', 6 ) . "</p>\n";
+}
+$long_data = Fields::elementor_data( $gestalt );
+$long_data[0]['elements'][0]['elements'][1]['settings']['editor'] = $paras;
+update_post_meta( $long_src, '_elementor_edit_mode', 'builder' );
+update_post_meta( $long_src, '_elementor_template_type', 'wp-page' );
+update_post_meta( $long_src, '_elementor_data', wp_slash( wp_json_encode( $long_data ) ) );
+$long_ro = Duplicator::create( $long_src, 'ro' );
+$before  = $calls();
+$ticks   = array();
+$result  = $tr->translate_post(
+	$long_ro,
+	'en',
+	'ro',
+	array(
+		'on_progress' => static function ( $done, $total ) use ( &$ticks ) {
+			$ticks[] = "$done/$total";
+		},
+	)
+);
+check( 'translated', true === $result, is_wp_error( $result ) ? $result->get_error_message() : $result );
+check( 'one AI request for the whole page', 1 === $calls() - $before, $calls() - $before );
+$editor = Fields::elementor_data( $long_ro )[0]['elements'][0]['elements'][1]['settings']['editor'];
+check( 'long text translated as one piece, all 12 paragraphs kept', 1 === substr_count( $editor, 'RO:' ) && 0 === strpos( $editor, 'RO:<p>Paragraph 1:' ) && 12 === substr_count( $editor, '<p>' ), $editor );
+check( 'progress reported', array( '13/13' ) === $ticks || ( 1 === count( $ticks ) && preg_match( '#^(\d+)/\1$#', $ticks[0] ) ), $ticks );
+
+section( 'A stopped translation changes nothing' );
+wp_update_post(
+	array(
+		'ID'         => $long_ro,
+		'post_title' => 'Handmatig vertaald',
+	)
+);
+$asked  = 0;
+$result = $tr->translate_post(
+	$long_ro,
+	'en',
+	'ro',
+	array(
+		'should_continue' => static function () use ( &$asked ) {
+			return ++$asked < 2; // Yes before the request, no right after it.
+		},
+	)
+);
+check( 'reported as stopped', is_wp_error( $result ) && 'wpllmml_cancelled' === $result->get_error_code(), $result );
+check( 'existing translation left untouched', 'Handmatig vertaald' === get_post( $long_ro )->post_title );
+
+section( 'An unreadable AI reply is retried in halves' );
+$out = $tr->translate_strings( array( 'One [[split]]', 'Two', 'Three', 'Four' ), 'en', 'nl' );
+check( 'all texts translated after halving', array( 'NL:One [[split]]', 'NL:Two', 'NL:Three', 'NL:Four' ) === $out, $out );
+
+section( 'Background job state' );
+$job = Job::start( $long_ro, 'en', 'ro' );
+check( 'job started and active', is_array( $job ) && Job::is_active( $long_ro ) );
+check( 'second start refused while active', is_wp_error( Job::start( $long_ro, 'en', 'ro' ) ) );
+update_post_meta( $long_ro, Job::META_BEAT, array( 'token' => $job['token'], 'at' => time() - 3600, 'cancel' => false ) );
+check( 'no heartbeat from the browser: no longer active', ! Job::is_active( $long_ro ) );
+check( 'a new start is then allowed', is_array( Job::start( $long_ro, 'en', 'ro' ) ) );
+Job::clear( $long_ro );
+wp_delete_post( $long_ro, true );
+wp_delete_post( $long_src, true );
+
 section( 'Texts tab: batched AI fill endpoint (HTTP)' );
 $site = getenv( 'WPLLMML_SITE_URL' );
 if ( $site ) {
@@ -153,6 +232,84 @@ if ( $site ) {
 	check( 'default language refused', isset( $res['success'] ) && false === $res['success'] );
 	$res = $post_batch( 'ro', array( $key_a ), false );
 	check( 'logged-out request refused', empty( $res['success'] ) );
+
+	section( 'Page translation in the background (HTTP, as the editor does it)' );
+	$ajax  = static function ( $action, $fields, $timeout = 60 ) use ( $site, $nonce, $cookies ) {
+		$response = wp_remote_post(
+			$site . '/wp-admin/admin-ajax.php',
+			array(
+				'timeout' => $timeout,
+				'body'    => array_merge(
+					array(
+						'action'      => $action,
+						'_ajax_nonce' => $nonce,
+					),
+					$fields
+				),
+				'cookies' => $cookies,
+			)
+		);
+		return is_wp_error( $response ) ? array( 'error' => $response->get_error_message() ) : json_decode( wp_remote_retrieve_body( $response ), true );
+	};
+	$wait  = static function ( $post_id, $token, $want, $seconds ) use ( $ajax ) {
+		$deadline = microtime( true ) + $seconds;
+		do {
+			$res = $ajax( 'wpllmml_ai_post_status', array( 'post' => $post_id, 'token' => $token ) );
+			if ( ! empty( $res['success'] ) && in_array( $res['data']['status'], (array) $want, true ) ) {
+				return $res['data'];
+			}
+			usleep( 500000 );
+		} while ( microtime( true ) < $deadline );
+		return isset( $res['data'] ) ? $res['data'] : $res;
+	};
+	$reiki = get_page_by_path( 'reiki' )->ID;
+	$old   = Translations::get_translation( $reiki, 'ro' );
+	if ( $old ) {
+		wp_delete_post( $old, true );
+	}
+	$res = $ajax( 'wpllmml_ai_post_start', array( 'mode' => 'create', 'source' => $reiki, 'lang' => 'ro' ) );
+	check( 'start creates the ro draft and a job', ! empty( $res['success'] ) && $res['data']['post'] > 0 && '' !== $res['data']['token'], $res );
+	$ro_reiki = ! empty( $res['success'] ) ? (int) $res['data']['post'] : 0;
+	$token    = ! empty( $res['success'] ) ? $res['data']['token'] : '';
+	$t0       = microtime( true );
+	$res      = $ajax( 'wpllmml_ai_post_run', array( 'post' => $ro_reiki, 'token' => $token ) );
+	check( 'run answers at once and keeps working on the server', ! empty( $res['data']['started'] ) && microtime( true ) - $t0 < 3, array( $res, microtime( true ) - $t0 ) );
+	$done = $wait( $ro_reiki, $token, array( 'done', 'error', 'cancelled' ), 30 );
+	check( 'status reaches done with the edit screen to open', isset( $done['status'] ) && 'done' === $done['status'] && false !== strpos( $done['redirect'], 'post.php?post=' . $ro_reiki ), $done );
+	clean_post_cache( $ro_reiki );
+	Translations::flush();
+	check( 'draft translated, linked and in Romanian', 0 === strpos( get_the_title( $ro_reiki ), 'RO:' ) && 'ro' === Translations::get_lang( $ro_reiki ) && Translations::get_translation( $reiki, 'ro' ) === $ro_reiki );
+	check( 'job cleared after done', '' === get_post_meta( $ro_reiki, Job::META, true ) );
+
+	section( 'One job per page; Cancel stops the server mid-request' );
+	wp_update_post( array( 'ID' => $ro_reiki, 'post_title' => 'Eigen titel' ) );
+	$slow_src = wp_insert_post( array( 'post_type' => 'page', 'post_status' => 'publish', 'post_title' => 'Slow page [[slow]]', 'post_name' => 'slow-page' ) );
+	$slow_ro  = Duplicator::create( $slow_src, 'ro' );
+	$res      = $ajax( 'wpllmml_ai_post_start', array( 'mode' => 'retranslate', 'post' => $slow_ro ) );
+	$token    = ! empty( $res['success'] ) ? $res['data']['token'] : '';
+	$ajax( 'wpllmml_ai_post_run', array( 'post' => $slow_ro, 'token' => $token ) );
+	$running = $wait( $slow_ro, $token, array( 'running' ), 10 );
+	check( 'job is running', isset( $running['status'] ) && 'running' === $running['status'], $running );
+	$second = $ajax( 'wpllmml_ai_post_start', array( 'mode' => 'retranslate', 'post' => $slow_ro ) );
+	check( 'a second start on the same page is refused', isset( $second['success'] ) && false === $second['success'] && false !== stripos( (string) $second['data'], 'already being translated' ), $second );
+	$t0 = microtime( true );
+	$ajax( 'wpllmml_ai_post_cancel', array( 'post' => $slow_ro, 'token' => $token ) );
+	// The runner notices within a few seconds, before the AI's 6-second answer arrives.
+	$deadline = microtime( true ) + 15;
+	do {
+		usleep( 300000 );
+		$state = get_post_meta( $slow_ro, Job::META_STATE, true );
+		wp_cache_delete( $slow_ro, 'post_meta' );
+		$state = get_post_meta( $slow_ro, Job::META_STATE, true );
+	} while ( ( empty( $state['status'] ) || 'running' === $state['status'] ) && microtime( true ) < $deadline );
+	check( 'server stopped after cancel', isset( $state['status'] ) && 'cancelled' === $state['status'], $state );
+	check( 'stopped mid-request (before the AI answered)', microtime( true ) - $t0 < 5.5, microtime( true ) - $t0 );
+	clean_post_cache( $slow_ro );
+	check( 'cancelled translation saved nothing', 'Slow page [[slow]]' === get_post( $slow_ro )->post_title );
+	Job::clear( $slow_ro );
+	wp_delete_post( $slow_ro, true );
+	wp_delete_post( $slow_src, true );
+	wp_delete_post( $ro_reiki, true );
 } else {
 	check( 'WPLLMML_SITE_URL set for HTTP checks', false );
 }

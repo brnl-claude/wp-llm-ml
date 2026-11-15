@@ -62,7 +62,7 @@ class Client {
 	 * Run a chat completion.
 	 *
 	 * @param array $messages List of [role, content].
-	 * @param array $options  temperature, max_tokens, timeout.
+	 * @param array $options  temperature, max_tokens, timeout, abort (callable: true stops the request).
 	 * @return string|\WP_Error Assistant message.
 	 */
 	public function chat( array $messages, array $options = array() ) {
@@ -79,10 +79,36 @@ class Client {
 		if ( ! empty( $options['max_tokens'] ) ) {
 			$body['max_tokens'] = (int) $options['max_tokens'];
 		}
+		$endpoint = trailingslashit( $c['base_url'] ) . 'chat/completions';
+		$hook     = null;
+		if ( ! empty( $options['abort'] ) && is_callable( $options['abort'] ) && defined( 'CURLOPT_XFERINFOFUNCTION' ) ) {
+			// Lets a running request be stopped: cURL calls this about once a second
+			// while it waits; the abort check itself runs at most every 2 seconds.
+			$abort = $options['abort'];
+			$hook  = static function ( $handle, $request, $url ) use ( $abort, $endpoint ) {
+				if ( $url !== $endpoint ) {
+					return;
+				}
+				$last = time();
+				curl_setopt( $handle, CURLOPT_NOPROGRESS, false ); // phpcs:ignore WordPress.WP.AlternativeFunctions
+				curl_setopt( // phpcs:ignore WordPress.WP.AlternativeFunctions
+					$handle,
+					CURLOPT_XFERINFOFUNCTION,
+					static function () use ( $abort, &$last ) {
+						if ( time() - $last < 2 ) {
+							return 0;
+						}
+						$last = time();
+						return call_user_func( $abort ) ? 1 : 0;
+					}
+				);
+			};
+			add_action( 'http_api_curl', $hook, 10, 3 );
+		}
 		$response = wp_remote_post(
-			trailingslashit( $c['base_url'] ) . 'chat/completions',
+			$endpoint,
 			array(
-				'timeout' => isset( $options['timeout'] ) ? (int) $options['timeout'] : 180,
+				'timeout' => isset( $options['timeout'] ) ? (int) $options['timeout'] : 600,
 				'headers' => array(
 					'Authorization' => 'Bearer ' . $c['api_key'],
 					'Content-Type'  => 'application/json',
@@ -91,6 +117,9 @@ class Client {
 				'body'    => wp_json_encode( apply_filters( 'wpllmml_ai_request_body', $body, $messages ) ),
 			)
 		);
+		if ( $hook ) {
+			remove_action( 'http_api_curl', $hook, 10 );
+		}
 		if ( is_wp_error( $response ) ) {
 			return $response;
 		}

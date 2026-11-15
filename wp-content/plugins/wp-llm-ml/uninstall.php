@@ -13,7 +13,7 @@ $wpllmml_settings = get_option( 'wpllmml_settings', array() );
 if ( is_array( $wpllmml_settings ) && ! empty( $wpllmml_settings['delete_data'] ) ) {
 	global $wpdb;
 	// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-	$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->postmeta} WHERE meta_key IN (%s, %s, %s)", '_wpllmml_lang', '_wpllmml_group', '_wpllmml_ai_translated' ) );
+	$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE %s", $wpdb->esc_like( '_wpllmml_' ) . '%' ) );
 	delete_option( 'wpllmml_settings' );
 	delete_option( 'wpllmml_strings' );
 }

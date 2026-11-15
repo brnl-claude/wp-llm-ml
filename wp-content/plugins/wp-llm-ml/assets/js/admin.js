@@ -6,6 +6,13 @@
 		return;
 	}
 
+	// A gateway timeout answers with an HTML page: report its status instead of a parse error.
+	function readJson( r ) {
+		return r.json().catch( function () {
+			throw new Error( 'HTTP ' + r.status + ( r.statusText ? ' ' + r.statusText : '' ) );
+		} );
+	}
+
 	function post( action, data ) {
 		var body = new FormData();
 		body.append( 'action', action );
@@ -13,9 +20,7 @@
 		Object.keys( data || {} ).forEach( function ( key ) {
 			body.append( key, data[ key ] );
 		} );
-		return fetch( cfg.ajax, { method: 'POST', credentials: 'same-origin', body: body } ).then( function ( r ) {
-			return r.json();
-		} );
+		return fetch( cfg.ajax, { method: 'POST', credentials: 'same-origin', body: body } ).then( readJson );
 	}
 
 	function el( tag, text, cls ) {
@@ -160,9 +165,7 @@
 				body.append( 'keys[]', k );
 			} );
 			fetch( cfg.ajax, { method: 'POST', credentials: 'same-origin', body: body } )
-				.then( function ( r ) {
-					return r.json();
-				} )
+				.then( readJson )
 				.then( function ( res ) {
 					if ( ! res || ! res.success ) {
 						throw new Error( res && res.data ? res.data : cfg.i18n.error );
@@ -183,6 +186,158 @@
 				} );
 		}
 		next();
+	} );
+
+	// Page translation with AI: the server translates the whole page in the
+	// background (one request to the AI, so it keeps the context); this page
+	// polls every 2 seconds. The polls are the heartbeat: when they stop, or on
+	// Cancel / leaving the page, the server stops too and saves nothing.
+	var activeJob = null;
+	function cancelActiveJob( beacon ) {
+		if ( ! activeJob ) {
+			return;
+		}
+		var data = new FormData();
+		data.append( 'action', 'wpllmml_ai_post_cancel' );
+		data.append( '_ajax_nonce', cfg.nonce );
+		data.append( 'post', activeJob.post );
+		data.append( 'token', activeJob.token );
+		if ( beacon && navigator.sendBeacon ) {
+			navigator.sendBeacon( cfg.ajax, data );
+		} else {
+			fetch( cfg.ajax, { method: 'POST', credentials: 'same-origin', body: data, keepalive: true } );
+		}
+	}
+	window.addEventListener( 'pagehide', function () {
+		cancelActiveJob( true );
+	} );
+
+	function clock( seconds ) {
+		var m = Math.floor( seconds / 60 );
+		var sec = seconds % 60;
+		return m + ':' + ( sec < 10 ? '0' : '' ) + sec;
+	}
+
+	document.addEventListener( 'click', function ( e ) {
+		var el = e.target.closest && e.target.closest( '.wpllmml-ai-post' );
+		if ( ! el || e.defaultPrevented ) {
+			return;
+		}
+		e.preventDefault();
+		if ( running ) {
+			return;
+		}
+		var host = el.closest( 'li, p' ) || el;
+		var box = host.parentNode.querySelector( '.wpllmml-ai-job' );
+		if ( box ) {
+			box.parentNode.removeChild( box );
+		}
+		box = document.createElement( 'div' );
+		box.className = 'wpllmml-ai-job';
+		box.innerHTML = '<progress></progress><div class="wpllmml-ai-job__line"><span class="spinner is-active"></span><span class="wpllmml-ai-status" role="status" aria-live="polite"></span></div><div class="wpllmml-ai-job__actions"><button type="button" class="button button-small wpllmml-ai-cancel"></button></div>';
+		host.insertAdjacentElement( 'afterend', box );
+		var spinner = box.querySelector( '.spinner' );
+		var status = box.querySelector( '.wpllmml-ai-status' );
+		var bar = box.querySelector( 'progress' );
+		var cancelButton = box.querySelector( '.wpllmml-ai-cancel' );
+		cancelButton.textContent = cfg.i18n.cancel;
+		var timer = null;
+		var since = Date.now();
+
+		function busy( on ) {
+			running = on;
+			el.classList.toggle( 'wpllmml-is-busy', on );
+			el.setAttribute( 'aria-disabled', on ? 'true' : 'false' );
+			spinner.classList.toggle( 'is-active', on );
+			cancelButton.hidden = ! on;
+			bar.hidden = ! on;
+		}
+		function stop( message, canRetry ) {
+			window.clearTimeout( timer );
+			activeJob = null;
+			busy( false );
+			status.textContent = message + ' ';
+			if ( canRetry ) {
+				var again = document.createElement( 'button' );
+				again.type = 'button';
+				again.className = 'button button-small';
+				again.textContent = cfg.i18n.retry;
+				again.addEventListener( 'click', function () {
+					box.parentNode.removeChild( box );
+					el.click();
+				} );
+				status.appendChild( again );
+			}
+		}
+		function call( action, data ) {
+			return post( action, data ).then( function ( res ) {
+				if ( ! res || ! res.success ) {
+					throw new Error( res && res.data ? res.data : cfg.i18n.error );
+				}
+				return res.data;
+			} );
+		}
+		function poll() {
+			call( 'wpllmml_ai_post_status', { post: activeJob.post, token: activeJob.token } ).then( function ( d ) {
+				if ( ! activeJob ) {
+					return;
+				}
+				if ( 'done' === d.status ) {
+					activeJob = null;
+					running = false;
+					status.textContent = cfg.i18n.opening;
+					window.location.href = d.redirect;
+					return;
+				}
+				if ( 'cancelled' === d.status ) {
+					stop( cfg.i18n.cancelled, true );
+					return;
+				}
+				if ( 'error' === d.status ) {
+					stop( format( cfg.i18n.stopped, d.message || cfg.i18n.error ), true );
+					return;
+				}
+				var elapsed = clock( Math.round( ( Date.now() - since ) / 1000 ) );
+				if ( d.total > 1 && d.done < d.total ) {
+					bar.max = d.total;
+					bar.value = d.done;
+					status.textContent = format( cfg.i18n.postProgressParts, elapsed, d.done, d.total );
+				} else {
+					status.textContent = format( cfg.i18n.postProgress, elapsed );
+				}
+				timer = window.setTimeout( poll, 2000 );
+			} ).catch( function () {
+				// A failed poll (network hiccup) is retried; the server keeps going.
+				if ( activeJob ) {
+					timer = window.setTimeout( poll, 3000 );
+				}
+			} );
+		}
+
+		cancelButton.addEventListener( 'click', function () {
+			cancelActiveJob( false );
+			stop( cfg.i18n.cancelled, true );
+		} );
+
+		busy( true );
+		status.textContent = cfg.i18n.preparing;
+		var data = { mode: el.getAttribute( 'data-mode' ) };
+		if ( 'create' === data.mode ) {
+			data.source = el.getAttribute( 'data-source' );
+			data.lang = el.getAttribute( 'data-lang' );
+		} else {
+			data.post = el.getAttribute( 'data-post' );
+		}
+		call( 'wpllmml_ai_post_start', data ).then( function ( d ) {
+			activeJob = { post: d.post, token: d.token };
+			since = Date.now();
+			// Start the work on the server; its answer is not needed (it may
+			// even time out at a proxy while the server keeps translating).
+			post( 'wpllmml_ai_post_run', { post: d.post, token: d.token } ).catch( function () {} );
+			timer = window.setTimeout( poll, 1500 );
+		} ).catch( function ( err ) {
+			stop( format( cfg.i18n.stopped, err.message ), true );
+		} );
 	} );
 
 	// Spell check.
