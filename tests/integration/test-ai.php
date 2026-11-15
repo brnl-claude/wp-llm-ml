@@ -107,6 +107,21 @@ check( 'apply fixes the Elementor text', true === ( new Spellcheck() )->apply( $
 check( 'text corrected', false !== strpos( Fields::elementor_data( $gestalt )[0]['elements'][0]['elements'][1]['settings']['editor'], 'Welcome to "Gestalt' ) );
 check( 'apply returns false when text is gone', false === ( new Spellcheck() )->apply( $gestalt, 'Welcom to', 'Welcome to' ) );
 
+section( 'Spell check: corrections land in the HTML, around formatting and entities' );
+$fix = static function ( $html, $original, $suggestion, $before = null ) {
+	return Spellcheck::replace_in_html( $html, $original, $suggestion, $before );
+};
+check( 'quote as entity, inside formatting (the reported case)', '<p>the sum of its <em>parts</em>,&#8221; I now focus</p>' === $fix( '<p>the sum of its <em>parts</em>&#8221; I now focus</p>', 'parts” I', 'parts,” I' ) );
+check( 'curly quote as character', '<p>its parts,” I now</p>' === $fix( '<p>its parts” I now</p>', 'parts” I', 'parts,” I' ) );
+// The check reads white space (also &nbsp; and line breaks) as one normal space.
+check( 'non-breaking space and line breaks', '<p>one,&nbsp;two</p>' === $fix( '<p>one&nbsp;two</p>', 'one two', 'one, two' ) && "<p>Hello,</p>\n<p>world</p>" === $fix( "<p>Hello</p>\n<p>world</p>", 'Hello world', 'Hello, world' ) );
+check( 'a word inside a link keeps the link', 'Read <a href="/x">the bok</a> now' !== $fix( 'Read <a href="/x">the bok</a> now', 'the bok', 'the book' ) && 'Read <a href="/x">the book</a> now' === $fix( 'Read <a href="/x">the bok</a> now', 'the bok', 'the book' ) );
+check( 'entity in a title', 'Tom &amp; Jerry' === $fix( 'Tom &amp; Jery', 'Tom & Jery', 'Tom & Jerry' ) );
+check( 'second occurrence picked by its context', 'teh cat and the dog' === $fix( 'teh cat and teh dog', 'teh dog', 'the dog' ) && 'teh cat and the dog' === $fix( 'teh cat and teh dog', 'teh', 'the', '…cat and ' ) );
+check( 'replacement across formatting keeps the tags', 'a <b>XY</b>' === $fix( 'a <b>x</b>y', 'xy', 'XY' ) );
+check( 'a less-than sign is escaped', 'a &lt; b' === $fix( 'a b', 'a b', 'a < b' ) );
+check( 'not there: nothing', null === $fix( '<p>nothing here</p>', 'parts” I', 'parts,” I' ) );
+
 section( 'Spell check: the same mistake in two places' );
 wp_update_post( array( 'ID' => $gestalt, 'post_title' => 'Welcom to Gestalt Therapy' ) );
 $data = Fields::elementor_data( $gestalt );

@@ -5,6 +5,7 @@ release-notes tonen de regels die sinds de vorige release zijn toegevoegd.
 
 ## 15 november 2026
 
+- Opgelost: "Apply" in het spellingsvenster gaf soms "Text not found", bijvoorbeeld bij `…sum of its parts” I` op de About-pagina. In de pagina stond daar opmaak tussen (`parts</em>”`), of een aanhalingsteken of harde spatie als HTML-code. De correctie wordt nu op de juiste plek in de HTML gezet, en alleen het stukje dat verandert (hier de komma), zodat de opmaak blijft staan. Komt dezelfde fout twee keer in een tekst voor, dan wordt de juiste plek gekozen aan de hand van de zin ervoor.
 - De doorhaling van een spellingsfout in het controlevenster is dunner, zodat de oorspronkelijke tekst goed leesbaar blijft.
 - Spellingscontrole vanuit het overzicht van Pagina's en Berichten: "Check spelling" onder de titel, of "Check spelling with AI" in het menu van een vertaling (`NL`, `RO`). Er opent een ruim venster met per fout de zin eromheen: de fout doorgestreept, de verbetering ernaast, waar het staat (bijvoorbeeld "Text Editor", "Title" of "Meta description") en een korte uitleg. Per fout kies je "Apply" of "Ignore", of in één keer "Apply all". Er verandert niets tot je op Apply klikt.
 - De knop "Check spelling with AI" op de bewerkpagina gebruikt hetzelfde venster. Na een correctie herlaadt de editor zodra je het venster sluit.

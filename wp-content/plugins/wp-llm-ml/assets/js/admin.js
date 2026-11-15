@@ -711,7 +711,7 @@
 			apply.disabled = true;
 			ignore.disabled = true;
 			state.textContent = cfg.i18n.checking;
-			return spellCall( 'wpllmml_apply_fix', { post: postId, original: finding.original, suggestion: finding.suggestion, field: finding.field } ).then( function ( d ) {
+			return spellCall( 'wpllmml_apply_fix', { post: postId, original: finding.original, suggestion: finding.suggestion, field: finding.field, before: finding.before } ).then( function ( d ) {
 				if ( d.applied ) {
 					if ( spell ) {
 						spell.applied++;

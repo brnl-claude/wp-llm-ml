@@ -221,15 +221,22 @@ class Spellcheck {
 
 	/**
 	 * Replace a fragment in the post's texts: first in the field it was
-	 * found in, otherwise its first occurrence anywhere.
+	 * found in, otherwise anywhere.
 	 *
-	 * @param int      $post_id    Post id.
-	 * @param string   $original   Wrong fragment.
-	 * @param string   $suggestion Correction.
-	 * @param int|null $field      Field index from check_post().
+	 * The check reads plain text, but fields hold HTML: the fragment may be
+	 * split by formatting (`<em>parts</em>”`), contain entities (`&#8221;`)
+	 * or other white space. The plain-text position is mapped back to the
+	 * HTML and only the part that differs is changed, so formatting stays.
+	 *
+	 * @param int         $post_id    Post id.
+	 * @param string      $original   Wrong fragment (plain text).
+	 * @param string      $suggestion Correction (plain text).
+	 * @param int|null    $field      Field index from check_post().
+	 * @param string|null $before     Text before the fragment (check_post()'s
+	 *                                "before"), to pick the right occurrence.
 	 * @return bool|\WP_Error True when applied, false when not found.
 	 */
-	public function apply( $post_id, $original, $suggestion, $field = null ) {
+	public function apply( $post_id, $original, $suggestion, $field = null, $before = null ) {
 		if ( '' === $original ) {
 			return false;
 		}
@@ -239,24 +246,137 @@ class Spellcheck {
 			$order = array_merge( array( (int) $field ), array_diff( $order, array( (int) $field ) ) );
 		}
 		foreach ( $order as $i ) {
-			$item = $items[ $i ];
-			$from = $original;
-			$to   = $suggestion;
-			$pos  = strpos( $item[2], $from );
-			if ( false === $pos ) {
-				// Texts are HTML: try the entity-encoded form too.
-				$from = esc_html( $original );
-				$to   = esc_html( $suggestion );
-				$pos  = strpos( $item[2], $from );
-				if ( false === $pos ) {
-					continue;
-				}
+			$html = self::replace_in_html( $items[ $i ][2], (string) $original, (string) $suggestion, $before );
+			if ( null === $html ) {
+				continue;
 			}
-			$items[ $i ][2] = substr_replace( $item[2], $to, $pos, strlen( $from ) );
+			$items[ $i ][2] = $html;
 			$saved          = Fields::save( $post_id, $items );
 			return is_wp_error( $saved ) ? $saved : true;
 		}
 		return false;
+	}
+
+	/**
+	 * Apply a plain-text correction to HTML.
+	 *
+	 * @param string      $html       Field text (HTML or plain).
+	 * @param string      $original   Wrong fragment.
+	 * @param string      $suggestion Correction.
+	 * @param string|null $before     Text before the fragment, if known.
+	 * @return string|null New text, null when the fragment is not there.
+	 */
+	public static function replace_in_html( $html, $original, $suggestion, $before = null ) {
+		list( $plain, $starts, $ends ) = self::text_map( $html );
+		$pos = self::find( $plain, $original, $before );
+		if ( false === $pos ) {
+			return null;
+		}
+		// Only the characters that differ are replaced (a comma is inserted,
+		// a letter swapped), so tags and entities around them stay as they are.
+		$a   = mb_str_split( $original );
+		$b   = mb_str_split( $suggestion );
+		$pre = 0;
+		while ( $pre < count( $a ) && $pre < count( $b ) && $a[ $pre ] === $b[ $pre ] ) {
+			++$pre;
+		}
+		$suf = 0;
+		while ( $suf < count( $a ) - $pre && $suf < count( $b ) - $pre && $a[ count( $a ) - 1 - $suf ] === $b[ count( $b ) - 1 - $suf ] ) {
+			++$suf;
+		}
+		$from   = $pos + strlen( implode( '', array_slice( $a, 0, $pre ) ) );
+		$to     = $pos + strlen( $original ) - strlen( implode( '', array_slice( $a, count( $a ) - $suf ) ) );
+		$insert = str_replace( array( '<', '>' ), array( '&lt;', '&gt;' ), implode( '', array_slice( $b, $pre, count( $b ) - $pre - $suf ) ) );
+		if ( $from < $to ) {
+			$start   = $starts[ $from ];
+			$end     = $ends[ $to - 1 ];
+			$segment = substr( $html, $start, $end - $start );
+			// Tags inside the replaced part are kept (after the new text).
+			preg_match_all( '/<[^>]*>/', $segment, $tags );
+			return substr( $html, 0, $start ) . $insert . implode( '', $tags[0] ) . substr( $html, $end );
+		}
+		// Only an insertion: right before the next character, or after the last.
+		$at = $from < strlen( $plain ) ? $starts[ $from ] : $ends[ $from - 1 ];
+		return substr( $html, 0, $at ) . $insert . substr( $html, $at );
+	}
+
+	/**
+	 * Position of a fragment in plain text; with several occurrences, the
+	 * one preceded by the given context.
+	 *
+	 * @param string      $plain    Plain text.
+	 * @param string      $fragment Fragment.
+	 * @param string|null $before   Text before it ("…" for shortened).
+	 * @return int|false
+	 */
+	private static function find( $plain, $fragment, $before ) {
+		$first = strpos( $plain, $fragment );
+		if ( false === $first || null === $before || '' === $before ) {
+			return $first;
+		}
+		$context = ltrim( (string) $before, '…' );
+		for ( $pos = $first; false !== $pos; $pos = strpos( $plain, $fragment, $pos + 1 ) ) {
+			if ( '' === $context || substr( substr( $plain, 0, $pos ), -strlen( $context ) ) === $context ) {
+				return $pos;
+			}
+		}
+		return $first;
+	}
+
+	/**
+	 * A field's text as check_post() reads it (see plain()), with for every
+	 * byte of it the place in the original text it came from.
+	 *
+	 * @param string $html Field text.
+	 * @return array plain text, start offsets, end offsets (per plain byte).
+	 */
+	private static function text_map( $html ) {
+		$html   = (string) $html;
+		$plain  = '';
+		$starts = array();
+		$ends   = array();
+		$length = strlen( $html );
+		$breaks = array( '</p>', '<br>', '<br />', '</li>', '</h1>', '</h2>', '</h3>', '</h4>' );
+		$space  = false;
+		$i      = 0;
+		while ( $i < $length ) {
+			if ( '<' === $html[ $i ] ) {
+				$close = strpos( $html, '>', $i );
+				$next  = false === $close ? $length : $close + 1;
+				if ( ! in_array( substr( $html, $i, $next - $i ), $breaks, true ) ) {
+					$i = $next;
+					continue;
+				}
+				$char = "\n";
+			} elseif ( '&' === $html[ $i ] && preg_match( '/&(?:#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);/Ai', $html, $m, 0, $i ) ) {
+				$char = html_entity_decode( $m[0], ENT_QUOTES, 'UTF-8' );
+				$next = $i + strlen( $m[0] );
+			} else {
+				$byte = ord( $html[ $i ] );
+				$size = $byte < 0x80 ? 1 : ( 0xC0 === ( $byte & 0xE0 ) ? 2 : ( 0xE0 === ( $byte & 0xF0 ) ? 3 : ( 0xF0 === ( $byte & 0xF8 ) ? 4 : 1 ) ) );
+				$char = substr( $html, $i, $size );
+				$next = $i + $size;
+			}
+			if ( preg_match( '/^\s+$/u', $char ) ) {
+				// White space collapses to one space, none at the start.
+				if ( '' === $plain || $space ) {
+					$i = $next;
+					continue;
+				}
+				$char  = ' ';
+				$space = true;
+			} else {
+				$space = false;
+			}
+			$bytes = strlen( $char );
+			for ( $n = 0; $n < $bytes; $n++ ) {
+				$starts[] = $i;
+				$ends[]   = $next;
+			}
+			$plain .= $char;
+			$i      = $next;
+		}
+		return array( $plain, $starts, $ends );
 	}
 
 	/* ------------------------------------------------------------------
