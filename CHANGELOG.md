@@ -5,6 +5,10 @@ release-notes tonen de regels die sinds de vorige release zijn toegevoegd.
 
 ## 15 november 2026
 
+- Een layoutwijziging doe je nog maar één keer. Sla je de Engelse pagina op in Elementor, dan nemen de Nederlandse en Roemeense versie de nieuwe opbouw, volgorde en stijl binnen enkele seconden vanzelf over. Vertaalde teksten blijven staan. Nieuwe of gewijzigde Engelse teksten worden met AI vertaald en staan meteen live.
+- Zo'n vertaling krijgt een stip, in het overzicht van Pagina's en in Elementor. Opslaan in Elementor of "Mark as reviewed" haalt de stip weg. Zonder AI blijven nieuwe teksten Engels; zodra AI weer beschikbaar is, worden ze bij de volgende keer alsnog vertaald.
+- Wat je per taal bewust anders hebt, blijft staan: een ander formulier, plaatje of link, of een blok dat alleen op de Nederlandse pagina staat. Moet een vertaling helemaal los blijven van het Engels, kies dan "Keep its own layout" in het taalmenu. Een vertaling die niet als kopie van de Engelse pagina is gemaakt, wordt nooit overschreven. Elke automatische wijziging is terug te draaien via Elementor → Geschiedenis → Revisies.
+- In de bovenbalk van Elementor staat nu EN · NL · RO, naast desktop/tablet/mobiel. Eén klik opent dezelfde pagina in een andere taal, zonder herladen. Met `+RO` maak je een ontbrekende vertaling aan, met AI of als kopie, en die gaat direct open.
 - Vertalen kan nu rechtstreeks vanuit het overzicht van Pagina's en Berichten. Klik op `+NL` of `+RO` en kies "Create translation (copy) and open Elementor" of "Create & translate with AI". De AI-vertaling loopt in de rij zelf, ook voor meerdere pagina's tegelijk, en eindigt met een link naar Elementor.
 - Een bestaande vertaling (`NL`, `RO`) heeft een menu met Edit with Elementor, Edit, View en "Translate again from English with AI".
 - Na een update laat het dashboard eenmalig zien wat er nieuw is. De melding verdwijnt zodra je hem wegklikt.

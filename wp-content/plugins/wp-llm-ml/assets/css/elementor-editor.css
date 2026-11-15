@@ -1,0 +1,82 @@
+/* LLM Multilingual — language switcher in the Elementor top bar (dark bar). */
+.wpllmml-ebar {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	height: 100%;
+	margin: 0 12px 0 4px;
+	padding: 0 8px 0 0;
+	border-right: 1px solid rgba(255, 255, 255, .14);
+}
+.wpllmml-ebar__lang {
+	position: relative;
+	min-width: 34px;
+	height: 26px;
+	padding: 0 7px;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	background: transparent;
+	color: inherit;
+	opacity: .72;
+	font: 600 12px/24px Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	letter-spacing: .03em;
+	cursor: pointer;
+}
+.wpllmml-ebar__lang:hover,
+.wpllmml-ebar__lang:focus-visible {
+	opacity: 1;
+	background: rgba(255, 255, 255, .1);
+	outline: none;
+}
+.wpllmml-ebar__lang:focus-visible { box-shadow: 0 0 0 2px rgba(255, 255, 255, .6); }
+.wpllmml-ebar__lang.is-active {
+	opacity: 1;
+	background: #f1f3f3;
+	color: #0c0d0e;
+}
+.wpllmml-ebar__lang.is-missing {
+	border: 1px dashed rgba(255, 255, 255, .45);
+	font-weight: 500;
+}
+.wpllmml-ebar__lang.has-review::after {
+	content: "";
+	position: absolute;
+	top: -3px;
+	right: -3px;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: #f0b849;
+	box-shadow: 0 0 0 2px #0c0d0e;
+}
+.wpllmml-ebar__lang.is-busy { animation: wpllmml-ebar-pulse 1.2s ease-in-out infinite; }
+@keyframes wpllmml-ebar-pulse { 50% { opacity: .35; } }
+
+/* Menu fallback (only when Elementor's Menu component is not available). */
+.wpllmml-ebar-backdrop { position: fixed; inset: 0; z-index: 99998; }
+.wpllmml-ebar-menu.is-fallback {
+	position: fixed;
+	z-index: 99999;
+	min-width: 220px;
+	max-width: 340px;
+	padding: 4px 0;
+	border-radius: 4px;
+	background: #fff;
+	color: #0c0d0e;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, .25);
+	font: 13px/1.4 Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.wpllmml-ebar-menu.is-fallback .wpllmml-ebar-note { padding: 6px 14px 8px; color: #515962; font-size: 12px; line-height: 1.45; }
+.wpllmml-ebar-item {
+	display: block;
+	width: 100%;
+	padding: 7px 14px;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+.wpllmml-ebar-item:hover,
+.wpllmml-ebar-item:focus { background: #f1f3f3; outline: none; }

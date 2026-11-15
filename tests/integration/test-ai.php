@@ -17,6 +17,8 @@ use WPLLMML\Settings;
 use WPLLMML\Translations;
 
 require_once __DIR__ . '/assert.php';
+// Elementor saves below would start a background layout sync; test-sync.php covers that.
+define( 'WPLLMML_SYNC_NO_SPAWN', true );
 wp_set_current_user( 1 );
 
 $settings       = Settings::all();

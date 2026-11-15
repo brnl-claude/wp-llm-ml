@@ -11,6 +11,7 @@
 namespace WPLLMML\Admin;
 
 use WPLLMML\Ai\Client;
+use WPLLMML\Ai\Fields;
 use WPLLMML\Ai\Job;
 use WPLLMML\Ai\Spellcheck;
 use WPLLMML\Ai\Translator;
@@ -19,6 +20,7 @@ use WPLLMML\Languages;
 use WPLLMML\Router;
 use WPLLMML\Settings;
 use WPLLMML\Strings;
+use WPLLMML\Sync;
 use WPLLMML\Translations;
 
 defined( 'ABSPATH' ) || exit;
@@ -72,6 +74,8 @@ class Admin {
 		add_action( 'admin_post_wpllmml_create', array( $this, 'handle_create' ) );
 		add_action( 'admin_post_wpllmml_ai_translate', array( $this, 'handle_ai_translate' ) );
 		add_action( 'admin_post_wpllmml_unlink', array( $this, 'handle_unlink' ) );
+		add_action( 'admin_post_wpllmml_reviewed', array( $this, 'handle_reviewed' ) );
+		add_action( 'admin_post_wpllmml_follow', array( $this, 'handle_follow' ) );
 		add_action( 'admin_post_wpllmml_install_packs', array( $this, 'handle_install_packs' ) );
 		add_action( 'admin_post_wpllmml_ai_strings', array( $this, 'handle_ai_strings' ) );
 		add_action( 'wp_ajax_wpllmml_spellcheck', array( $this, 'ajax_spellcheck' ) );
@@ -119,6 +123,51 @@ class Admin {
 			$args['ai'] = 1;
 		}
 		return wp_nonce_url( add_query_arg( $args, admin_url( 'admin-post.php' ) ), 'wpllmml_create_' . (int) $post_id );
+	}
+
+	/**
+	 * Nonced admin-post URL for an action on one post.
+	 *
+	 * @param string $action Action.
+	 * @param int    $post_id Post.
+	 * @param array  $args   Extra args.
+	 * @return string
+	 */
+	public static function action_url( $action, $post_id, array $args = array() ) {
+		return wp_nonce_url(
+			add_query_arg(
+				array_merge(
+					array(
+						'action' => $action,
+						'post'   => (int) $post_id,
+					),
+					$args
+				),
+				admin_url( 'admin-post.php' )
+			),
+			$action . '_' . (int) $post_id
+		);
+	}
+
+	/**
+	 * "4 texts updated automatically…" for a review marker.
+	 *
+	 * @param array  $review       Marker.
+	 * @param string $default_name Default language name.
+	 * @return string
+	 */
+	public static function review_text( array $review, $default_name ) {
+		$parts = array();
+		if ( ! empty( $review['translated'] ) ) {
+			/* translators: 1: number of texts, 2: language name */
+			$parts[] = sprintf( _n( '%1$d text was added or changed on the %2$s page and translated with AI.', '%1$d texts were added or changed on the %2$s page and translated with AI.', (int) $review['translated'], 'wp-llm-ml' ), (int) $review['translated'], $default_name );
+		}
+		if ( ! empty( $review['untranslated'] ) ) {
+			/* translators: 1: number of texts, 2: language name */
+			$parts[] = sprintf( _n( '%1$d new text is still in %2$s.', '%1$d new texts are still in %2$s.', (int) $review['untranslated'], 'wp-llm-ml' ), (int) $review['untranslated'], $default_name );
+		}
+		$parts[] = __( 'Please review (saving the page in Elementor marks it as reviewed).', 'wp-llm-ml' );
+		return implode( ' ', $parts );
 	}
 
 	/**
@@ -938,6 +987,14 @@ class Admin {
 					$items[] = sprintf( '<a href="%s">%s</a>', esc_url( (string) get_edit_post_link( $tid, 'raw' ) ), esc_html__( 'Edit', 'wp-llm-ml' ) );
 				}
 				$items[] = sprintf( '<a href="%s">%s</a>', esc_url( 'publish' === $status ? get_permalink( $tid ) : get_preview_post_link( $tid ) ), 'publish' === $status ? esc_html__( 'View', 'wp-llm-ml' ) : esc_html__( 'Preview', 'wp-llm-ml' ) );
+				$review = Sync::review( $tid );
+				$notes  = array();
+				if ( $review && current_user_can( 'edit_post', $tid ) ) {
+					$items[] = sprintf( '<a href="%s">%s</a>', esc_url( self::action_url( 'wpllmml_reviewed', $tid ) ), esc_html__( 'Mark as reviewed', 'wp-llm-ml' ) );
+				}
+				if ( $review ) {
+					$notes[] = self::review_text( $review, $default_name );
+				}
 				if ( $ai && $code !== Languages::default_code() && current_user_can( 'edit_post', $tid ) ) {
 					$items[] = sprintf(
 						'<button type="button" class="wpllmml-ai-post wpllmml-confirm" data-mode="retranslate" data-post="%1$d" data-lang="%2$s" data-context="list">%3$s</button>',
@@ -947,12 +1004,35 @@ class Admin {
 						esc_html( sprintf( __( 'Translate again from %s with AI', 'wp-llm-ml' ), $default_name ) )
 					);
 				}
+				$syncing = false;
+				if ( $own === Languages::default_code() && Fields::is_elementor( $post_id ) && Fields::is_elementor( $tid ) && current_user_can( 'edit_post', $tid ) ) {
+					$follows = Sync::follows( $tid );
+					$syncing = $follows && Sync::is_pending( $tid );
+					$items[] = sprintf(
+						'<a href="%1$s" class="wpllmml-follow">%2$s</a>',
+						esc_url( self::action_url( 'wpllmml_follow', $tid, array( 'on' => $follows ? 0 : 1 ) ) ),
+						$follows
+							/* translators: %s: language name */
+							? esc_html( sprintf( __( 'Keep its own layout (stop following %s)', 'wp-llm-ml' ), $default_name ) )
+							/* translators: %s: language name */
+							: esc_html( sprintf( __( 'Follow the %s layout again', 'wp-llm-ml' ), $default_name ) )
+					);
+					/* translators: %s: language name */
+					$notes[] = $follows ? sprintf( __( 'Layout follows the %s page.', 'wp-llm-ml' ), $default_name ) : __( 'Has its own layout.', 'wp-llm-ml' );
+					if ( $syncing ) {
+						/* translators: %s: language name */
+						$notes[] = sprintf( __( 'Updating from the %s page…', 'wp-llm-ml' ), $default_name );
+					}
+				}
+				if ( $notes ) {
+					array_unshift( $items, '<div class="wpllmml-lang-menu__note">' . esc_html( implode( ' ', $notes ) ) . '</div>' );
+				}
 				$status_object = get_post_status_object( $status );
 				self::print_lang_menu(
-					'is-' . $status,
+					'is-' . $status . ( $review ? ' has-review' : '' ) . ( $syncing ? ' is-syncing' : '' ),
 					$label,
 					/* translators: 1: language, 2: status */
-					sprintf( __( '%1$s translation (%2$s)', 'wp-llm-ml' ), $lang['name'], $status_object ? $status_object->label : $status ),
+					trim( sprintf( __( '%1$s translation (%2$s)', 'wp-llm-ml' ), $lang['name'], $status_object ? $status_object->label : $status ) . ' ' . implode( ' ', $notes ) ),
 					$items,
 					$code
 				);
@@ -1222,6 +1302,34 @@ class Admin {
 		}
 		Translations::unlink( $post_id );
 		wp_safe_redirect( (string) get_edit_post_link( $post_id, 'raw' ) );
+		exit;
+	}
+
+	/**
+	 * Clear a translation's review marker.
+	 */
+	public function handle_reviewed() {
+		$post_id = isset( $_GET['post'] ) ? absint( $_GET['post'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification
+		check_admin_referer( 'wpllmml_reviewed_' . $post_id );
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			wp_die( esc_html__( 'You are not allowed to do this.', 'wp-llm-ml' ), 403 );
+		}
+		delete_post_meta( $post_id, Sync::META_REVIEW );
+		wp_safe_redirect( wp_get_referer() ? wp_get_referer() : admin_url( 'edit.php?post_type=' . get_post_type( $post_id ) ) );
+		exit;
+	}
+
+	/**
+	 * Let a translation follow its source layout again, or keep its own.
+	 */
+	public function handle_follow() {
+		$post_id = isset( $_GET['post'] ) ? absint( $_GET['post'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification
+		check_admin_referer( 'wpllmml_follow_' . $post_id );
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			wp_die( esc_html__( 'You are not allowed to do this.', 'wp-llm-ml' ), 403 );
+		}
+		Sync::set_follow( $post_id, ! empty( $_GET['on'] ) ); // phpcs:ignore WordPress.Security.NonceVerification
+		wp_safe_redirect( wp_get_referer() ? wp_get_referer() : admin_url( 'edit.php?post_type=' . get_post_type( $post_id ) ) );
 		exit;
 	}
 
