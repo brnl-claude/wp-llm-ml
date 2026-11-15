@@ -76,7 +76,7 @@ tests/package.sh        # bouwt de zip, installeert hem in een verse site en tes
 bin/build-zip.sh        # alleen de zip bouwen → dist/wp-llm-ml.zip
 ```
 
-Vier suites (161 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
+Vier suites (166 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
 queries), HTTP (routing, redirects, hreflang, menu's, switcher, links, lijsten, REST, sitemaps) en
 AI (tegen een nep-OpenAI-server: Elementor-teksten, repeaters, Yoast-velden, spellingscontrole, Abilities)
 en package (zip installeren in een verse site, activeren, updaten via de WordPress-upgrader).

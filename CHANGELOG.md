@@ -5,6 +5,8 @@ release-notes tonen de regels die sinds de vorige release zijn toegevoegd.
 
 ## 15 november 2026
 
+- "Fill empty … fields with AI" (Instellingen → Languages → Texts) laat nu een voortgangsbalk zien en vult de velden per groepje in; elk groepje wordt meteen opgeslagen. Een fout, zoals een verkeerde API-sleutel, staat er direct bij.
+- De andere AI-knoppen (vertalen met AI) en "Install language packs" tonen een melding met spinner zolang ze bezig zijn, en reageren niet op een tweede klik.
 - Eerste versie. Talen met eigen URL's (`/nl/…`, `/ro/…`); de Engelse URL's blijven zoals ze zijn.
 - "+NL" maakt een conceptvertaling van een pagina, met Elementor-layout, GeneratePress-instellingen en Yoast-velden, die je in Elementor vertaalt.
 - Bezoekers met een Nederlandse of Roemeense browser gaan op de homepage één keer naar hun taal; op andere pagina's zien ze een balk met een link. Hun keuze wordt onthouden, zoekmachines worden nooit doorgestuurd.

@@ -24,7 +24,7 @@ sleep 1
 status=0
 echo "== Model tests";  WPLLMML_IDS_FILE="$WORK/ids.json" php "$REPO/tests/bin/wp-eval.php" "$WORK/site" "$REPO/tests/integration/test-model.php" || status=1
 echo "== HTTP tests";   php "$REPO/tests/integration/test-http.php" "http://localhost:$PORT" || status=1
-echo "== AI tests";     WPLLMML_MOCK_AI="http://localhost:$AI_PORT/v1" php "$REPO/tests/bin/wp-eval.php" "$WORK/site" "$REPO/tests/integration/test-ai.php" || status=1
+echo "== AI tests";     WPLLMML_MOCK_AI="http://localhost:$AI_PORT/v1" WPLLMML_SITE_URL="http://localhost:$PORT" php "$REPO/tests/bin/wp-eval.php" "$WORK/site" "$REPO/tests/integration/test-ai.php" || status=1
 
 if grep -E "PHP (Fatal|Warning|Notice|Deprecated)" "$WORK/site/debug.log" 2>/dev/null | grep -q "plugins/wp-llm-ml/"; then
 	echo "== PHP messages from the plugin:"
