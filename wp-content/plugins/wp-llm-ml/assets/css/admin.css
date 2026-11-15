@@ -104,7 +104,13 @@ dialog.wpllmml-spell::backdrop { background: rgba(29, 35, 39, .55); }
 .wpllmml-spell__item::before { content: counter(wpllmml-spell); position: absolute; top: 12px; left: 12px; width: 22px; height: 22px; border-radius: 50%; background: #f0f0f1; font-size: 12px; font-weight: 600; line-height: 22px; text-align: center; color: #50575e; }
 .wpllmml-spell__where { margin-bottom: 4px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #646970; }
 .wpllmml-spell__context { margin: 0; font-size: 15px; line-height: 1.65; }
-.wpllmml-spell__context del { padding: 1px 2px; border-radius: 3px; background: #fcf0f1; color: #b32d2e; text-decoration-thickness: 2px; }
+.wpllmml-spell__context del {
+	padding: 1px 2px;
+	border-radius: 3px;
+	background: #fcf0f1;
+	color: #b32d2e;
+	text-decoration-thickness: 1px;
+}
 .wpllmml-spell__context ins { margin-left: 4px; padding: 1px 3px; border-radius: 3px; background: #edfaef; color: #00450c; font-weight: 600; text-decoration: none; }
 .wpllmml-spell__why { margin: 6px 0 0; color: #50575e; }
 .wpllmml-spell__actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
