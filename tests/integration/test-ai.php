@@ -98,9 +98,49 @@ $data[0]['elements'][0]['elements'][1]['settings']['editor'] = str_replace( 'Wel
 Fields::save_elementor_data( $gestalt, $data );
 $findings = ( new Spellcheck() )->check_post( $gestalt );
 check( 'one real finding, hallucination dropped', is_array( $findings ) && 1 === count( $findings ) && 'Welcom to' === $findings[0]['original'], $findings );
-check( 'apply fixes the Elementor text', true === ( new Spellcheck() )->apply( $gestalt, 'Welcom to', 'Welcome to' ) );
+check( 'shown in its sentence', '' === $findings[0]['before'] && 0 === strpos( $findings[0]['after'], ' "Gestalt Therapy". I offer sessions' ), $findings[0] );
+check( 'long context shortened at a word', '…' === mb_substr( $findings[0]['after'], -1 ) && mb_strlen( $findings[0]['after'] ) <= 112, $findings[0]['after'] );
+check( 'where: the Elementor widget', 'Text Editor' === $findings[0]['where'], $findings[0]['where'] );
+$field = $findings[0]['field'];
+check( 'field points at the text', 'elementor' === Fields::collect( $gestalt )[ $field ][0] && false !== strpos( Fields::collect( $gestalt )[ $field ][2], 'Welcom to' ) );
+check( 'apply fixes the Elementor text', true === ( new Spellcheck() )->apply( $gestalt, 'Welcom to', 'Welcome to', $field ) );
 check( 'text corrected', false !== strpos( Fields::elementor_data( $gestalt )[0]['elements'][0]['elements'][1]['settings']['editor'], 'Welcome to "Gestalt' ) );
 check( 'apply returns false when text is gone', false === ( new Spellcheck() )->apply( $gestalt, 'Welcom to', 'Welcome to' ) );
+
+section( 'Spell check: the same mistake in two places' );
+wp_update_post( array( 'ID' => $gestalt, 'post_title' => 'Welcom to Gestalt Therapy' ) );
+$data = Fields::elementor_data( $gestalt );
+$data[0]['elements'][0]['elements'][1]['settings']['editor'] = str_replace( 'Welcome to', 'Welcom to', $data[0]['elements'][0]['elements'][1]['settings']['editor'] );
+Fields::save_elementor_data( $gestalt, $data );
+$findings = ( new Spellcheck() )->check_post( $gestalt );
+$wheres   = wp_list_pluck( $findings, 'where' );
+check( 'both found, each with its place', array( 'Title', 'Text Editor' ) === $wheres, $wheres );
+( new Spellcheck() )->apply( $gestalt, 'Welcom to', 'Welcome to', $findings[1]['field'] );
+check( 'apply changes the field it was found in', 'Welcom to Gestalt Therapy' === get_post( $gestalt )->post_title && false !== strpos( Fields::elementor_data( $gestalt )[0]['elements'][0]['elements'][1]['settings']['editor'], 'Welcome to "Gestalt' ) );
+( new Spellcheck() )->apply( $gestalt, 'Welcom to', 'Welcome to', $findings[0]['field'] );
+check( 'and the title', 'Welcome to Gestalt Therapy' === get_post( $gestalt )->post_title );
+wp_update_post( array( 'ID' => $gestalt, 'post_title' => 'Gestalt Therapy' ) );
+
+section( 'Spell check in the background' );
+$data = Fields::elementor_data( $gestalt );
+$data[0]['elements'][0]['elements'][1]['settings']['editor'] = str_replace( 'Welcome to', 'Welcom to', $data[0]['elements'][0]['elements'][1]['settings']['editor'] );
+Fields::save_elementor_data( $gestalt, $data );
+$token = Spellcheck::start( $gestalt );
+check( 'starts as running', 'running' === Spellcheck::status( $gestalt, $token )['status'] );
+( new Spellcheck() )->run( $gestalt, $token );
+$state = Spellcheck::status( $gestalt, $token );
+check( 'result stored', 'done' === $state['status'] && 1 === count( $state['findings'] ) && $state['texts'] > 1 && 1 === $state['total'], $state );
+$token = Spellcheck::start( $gestalt );
+Spellcheck::cancel( $gestalt, $token );
+$mock_calls = static function () {
+	clearstatcache();
+	$log = sys_get_temp_dir() . '/wpllmml-mock-ai.log';
+	return is_file( $log ) ? count( file( $log ) ) : 0;
+};
+$before     = $mock_calls();
+( new Spellcheck() )->run( $gestalt, $token );
+check( 'cancelled before it ran: no AI request', 'cancelled' === Spellcheck::status( $gestalt, $token )['status'] && $before === $mock_calls() );
+check( 'unknown check', 'error' === Spellcheck::status( $gestalt, 'nope' )['status'] );
 
 section( 'Abilities' );
 $abilities = function_exists( 'wp_get_abilities' ) ? array_keys( wp_get_abilities() ) : array();
@@ -312,6 +352,22 @@ if ( $site ) {
 	wp_delete_post( $slow_ro, true );
 	wp_delete_post( $slow_src, true );
 	wp_delete_post( $ro_reiki, true );
+
+	section( 'Spell check dialog (HTTP, as the post list does it)' );
+	$res = $ajax( 'wpllmml_spell_start', array( 'post' => $gestalt ) );
+	check( 'answers at once with a token and the page', ! empty( $res['data']['token'] ) && 'Gestalt Therapy' === $res['data']['title'] && 'English' === $res['data']['language'], $res );
+	$token    = isset( $res['data']['token'] ) ? $res['data']['token'] : '';
+	$deadline = microtime( true ) + 30;
+	do {
+		usleep( 300000 );
+		$res = $ajax( 'wpllmml_spell_status', array( 'post' => $gestalt, 'token' => $token ) );
+	} while ( isset( $res['data']['status'] ) && 'running' === $res['data']['status'] && microtime( true ) < $deadline );
+	$finding = isset( $res['data']['findings'][0] ) ? $res['data']['findings'][0] : array();
+	check( 'findings with context', 'done' === $res['data']['status'] && 'Welcom to' === $finding['original'] && 'Text Editor' === $finding['where'], $res );
+	$res = $ajax( 'wpllmml_apply_fix', array( 'post' => $gestalt, 'original' => $finding['original'], 'suggestion' => $finding['suggestion'], 'field' => $finding['field'] ) );
+	check( 'applied', ! empty( $res['data']['applied'] ) );
+	clean_post_cache( $gestalt );
+	check( 'saved', false !== strpos( Fields::elementor_data( $gestalt )[0]['elements'][0]['elements'][1]['settings']['editor'], 'Welcome to "Gestalt' ) );
 } else {
 	check( 'WPLLMML_SITE_URL set for HTTP checks', false );
 }

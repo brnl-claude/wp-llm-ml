@@ -598,54 +598,245 @@
 		next();
 	}
 
-	// Spell check.
+	// Spell check: a dialog that shows every finding in its sentence. Opened
+	// from the post lists (row action, language menus) and the edit screen.
+	// The check runs on the server (answer at once, then polled), so a long
+	// page cannot run into a gateway time-out.
+	var spell = null;
+	function spellCall( action, data ) {
+		return post( action, data ).then( function ( res ) {
+			if ( ! res || ! res.success ) {
+				throw new Error( res && res.data ? res.data : cfg.i18n.error );
+			}
+			return res.data;
+		} );
+	}
+	function spellCancel( beacon ) {
+		if ( ! spell || ! spell.token || 'running' !== spell.state ) {
+			return;
+		}
+		spell.state = 'cancelled';
+		var data = new FormData();
+		data.append( 'action', 'wpllmml_spell_cancel' );
+		data.append( '_ajax_nonce', cfg.nonce );
+		data.append( 'post', spell.post );
+		data.append( 'token', spell.token );
+		if ( beacon && navigator.sendBeacon ) {
+			navigator.sendBeacon( cfg.ajax, data );
+		} else {
+			fetch( cfg.ajax, { method: 'POST', credentials: 'same-origin', body: data, keepalive: true } );
+		}
+	}
+	window.addEventListener( 'pagehide', function () {
+		spellCancel( true );
+	} );
+
+	function spellDialog() {
+		var dialog = document.querySelector( 'dialog.wpllmml-spell' );
+		if ( dialog ) {
+			return dialog;
+		}
+		dialog = document.createElement( 'dialog' );
+		dialog.className = 'wpllmml-spell';
+		dialog.innerHTML = '<div class="wpllmml-spell__head"><h2 class="wpllmml-spell__title"></h2><span class="wpllmml-spell__lang"></span><button type="button" class="wpllmml-spell__x" aria-label=""><span aria-hidden="true">×</span></button></div>' +
+			'<div class="wpllmml-spell__body"><p class="wpllmml-spell__note" hidden></p><div class="wpllmml-spell__status" role="status" aria-live="polite"></div><ol class="wpllmml-spell__list"></ol></div>' +
+			'<div class="wpllmml-spell__foot"><span class="wpllmml-spell__links"></span><button type="button" class="button wpllmml-spell__all" hidden></button><button type="button" class="button button-primary wpllmml-spell__close"></button></div>';
+		dialog.querySelector( '.wpllmml-spell__x' ).setAttribute( 'aria-label', cfg.i18n.close );
+		dialog.querySelector( '.wpllmml-spell__close' ).textContent = cfg.i18n.close;
+		dialog.querySelector( '.wpllmml-spell__all' ).textContent = cfg.i18n.applyAll;
+		dialog.querySelector( '.wpllmml-spell__x' ).addEventListener( 'click', function () {
+			dialog.close();
+		} );
+		dialog.querySelector( '.wpllmml-spell__close' ).addEventListener( 'click', function () {
+			dialog.close();
+		} );
+		dialog.addEventListener( 'close', function () {
+			spellCancel( false );
+			if ( spell ) {
+				window.clearTimeout( spell.timer );
+				if ( spell.inEditor && spell.applied ) {
+					window.location.reload();
+				}
+			}
+			spell = null;
+		} );
+		// A click on the backdrop closes the dialog.
+		dialog.addEventListener( 'click', function ( e ) {
+			if ( e.target === dialog ) {
+				dialog.close();
+			}
+		} );
+		dialog.querySelector( '.wpllmml-spell__all' ).addEventListener( 'click', function () {
+			var buttons = Array.prototype.slice.call( dialog.querySelectorAll( '.wpllmml-spell__item:not(.is-done) .wpllmml-spell__apply' ) );
+			( function next() {
+				var button = buttons.shift();
+				if ( button ) {
+					button.wpllmmlApply().then( next );
+				}
+			}() );
+		} );
+		document.body.appendChild( dialog );
+		return dialog;
+	}
+
+	function spellItem( finding, postId ) {
+		var item = el( 'li', '', 'wpllmml-spell__item' );
+		item.appendChild( el( 'div', finding.where, 'wpllmml-spell__where' ) );
+		var context = el( 'p', '', 'wpllmml-spell__context' );
+		context.appendChild( document.createTextNode( finding.before ) );
+		context.appendChild( el( 'del', finding.original ) );
+		context.appendChild( el( 'ins', finding.suggestion ) );
+		context.appendChild( document.createTextNode( finding.after ) );
+		item.appendChild( context );
+		if ( finding.explanation ) {
+			item.appendChild( el( 'p', finding.explanation, 'wpllmml-spell__why' ) );
+		}
+		var actions = el( 'div', '', 'wpllmml-spell__actions' );
+		var apply = el( 'button', cfg.i18n.apply, 'button button-small wpllmml-spell__apply' );
+		var ignore = el( 'button', cfg.i18n.ignore, 'button button-small button-link' );
+		var state = el( 'span', '', 'wpllmml-spell__state' );
+		apply.type = 'button';
+		ignore.type = 'button';
+		actions.appendChild( apply );
+		actions.appendChild( ignore );
+		actions.appendChild( state );
+		item.appendChild( actions );
+		function done( cls, text ) {
+			item.classList.add( 'is-done', cls );
+			state.textContent = text;
+			apply.remove();
+			ignore.remove();
+		}
+		apply.wpllmmlApply = function () {
+			apply.disabled = true;
+			ignore.disabled = true;
+			state.textContent = cfg.i18n.checking;
+			return spellCall( 'wpllmml_apply_fix', { post: postId, original: finding.original, suggestion: finding.suggestion, field: finding.field } ).then( function ( d ) {
+				if ( d.applied ) {
+					if ( spell ) {
+						spell.applied++;
+					}
+					done( 'is-applied', '✓ ' + cfg.i18n.applied );
+				} else {
+					done( 'is-missing', cfg.i18n.notFound );
+				}
+			} ).catch( function ( err ) {
+				apply.disabled = false;
+				ignore.disabled = false;
+				state.textContent = cfg.i18n.error + ': ' + err.message;
+			} );
+		};
+		apply.addEventListener( 'click', apply.wpllmmlApply );
+		ignore.addEventListener( 'click', function () {
+			done( 'is-ignored', cfg.i18n.ignored );
+		} );
+		return item;
+	}
+
+	function openSpell( postId, inEditor ) {
+		var dialog = spellDialog();
+		var title = dialog.querySelector( '.wpllmml-spell__title' );
+		var lang = dialog.querySelector( '.wpllmml-spell__lang' );
+		var note = dialog.querySelector( '.wpllmml-spell__note' );
+		var status = dialog.querySelector( '.wpllmml-spell__status' );
+		var list = dialog.querySelector( '.wpllmml-spell__list' );
+		var links = dialog.querySelector( '.wpllmml-spell__links' );
+		var all = dialog.querySelector( '.wpllmml-spell__all' );
+		title.textContent = cfg.i18n.checking;
+		lang.textContent = '';
+		list.textContent = '';
+		links.textContent = '';
+		all.hidden = true;
+		note.hidden = ! inEditor;
+		// Applying saves the stored page; the editor reloads when the dialog closes.
+		note.textContent = inEditor ? cfg.i18n.saveFirst : '';
+		status.className = 'wpllmml-spell__status is-busy';
+		status.textContent = cfg.i18n.spellStart;
+		var current = { post: postId, token: '', state: 'running', inEditor: inEditor, applied: 0, timer: null, since: Date.now() };
+		spell = current;
+		if ( ! dialog.open ) {
+			dialog.showModal();
+		}
+		function fail( message ) {
+			if ( spell !== current ) {
+				return;
+			}
+			current.state = 'error';
+			status.className = 'wpllmml-spell__status is-error';
+			status.textContent = format( cfg.i18n.stopped, message ) + ' ';
+			var again = el( 'button', cfg.i18n.retry, 'button button-small' );
+			again.type = 'button';
+			again.addEventListener( 'click', function () {
+				openSpell( postId, inEditor );
+			} );
+			status.appendChild( again );
+		}
+		function poll() {
+			spellCall( 'wpllmml_spell_status', { post: postId, token: current.token } ).then( function ( d ) {
+				if ( spell !== current || 'running' !== current.state ) {
+					return;
+				}
+				if ( 'running' === d.status ) {
+					var time = clock( Math.round( ( Date.now() - current.since ) / 1000 ) );
+					status.textContent = d.total > 1
+						? format( cfg.i18n.spellParts, d.texts, time, Math.min( d.done + 1, d.total ), d.total )
+						: format( cfg.i18n.spellRunning, d.texts || '…', time );
+					current.timer = window.setTimeout( poll, 2000 );
+					return;
+				}
+				if ( 'done' !== d.status ) {
+					fail( d.message || d.status );
+					return;
+				}
+				current.state = 'done';
+				var findings = d.findings || [];
+				status.className = 'wpllmml-spell__status ' + ( findings.length ? 'is-found' : 'is-clean' );
+				status.textContent = findings.length
+					? ( 1 === findings.length ? cfg.i18n.spellOne : format( cfg.i18n.spellFound, findings.length ) )
+					: format( cfg.i18n.spellNone, d.texts );
+				findings.forEach( function ( finding ) {
+					list.appendChild( spellItem( finding, postId ) );
+				} );
+				all.hidden = findings.length < 2;
+			} ).catch( function () {
+				if ( spell === current && 'running' === current.state ) {
+					current.timer = window.setTimeout( poll, 3000 );
+				}
+			} );
+		}
+		spellCall( 'wpllmml_spell_start', { post: postId } ).then( function ( d ) {
+			if ( spell !== current ) {
+				return;
+			}
+			current.token = d.token;
+			title.textContent = format( cfg.i18n.spellTitle, d.title );
+			lang.textContent = d.language;
+			if ( ! inEditor ) {
+				if ( d.editor ) {
+					links.appendChild( link( d.editor, -1 !== d.editor.indexOf( 'action=elementor' ) ? cfg.i18n.editElementor : cfg.i18n.edit ) );
+				}
+				if ( d.view ) {
+					links.appendChild( document.createTextNode( ' · ' ) );
+					links.appendChild( link( d.view, cfg.i18n.view ) );
+				}
+			}
+			current.timer = window.setTimeout( poll, 1500 );
+		} ).catch( function ( err ) {
+			fail( err.message );
+		} );
+	}
+
 	document.addEventListener( 'click', function ( e ) {
-		var button = e.target.closest && e.target.closest( '.wpllmml-spellcheck' );
+		var button = e.target.closest && e.target.closest( '.wpllmml-spell-open' );
 		if ( ! button ) {
 			return;
 		}
 		e.preventDefault();
-		var postId = button.getAttribute( 'data-post' );
-		var out = button.parentNode.nextElementSibling;
-		out.textContent = cfg.i18n.checking;
-		button.disabled = true;
-		post( 'wpllmml_spellcheck', { post: postId } ).then( function ( res ) {
-			button.disabled = false;
-			out.textContent = '';
-			if ( ! res || ! res.success ) {
-				out.textContent = cfg.i18n.error + ': ' + ( res && res.data ? res.data : '' );
-				return;
-			}
-			if ( ! res.data.length ) {
-				out.textContent = cfg.i18n.noErrors;
-				return;
-			}
-			out.appendChild( el( 'p', cfg.i18n.saveFirst, 'description' ) );
-			var list = el( 'ul' );
-			res.data.forEach( function ( item ) {
-				var li = el( 'li' );
-				li.appendChild( el( 'del', item.original ) );
-				li.appendChild( document.createTextNode( ' → ' ) );
-				li.appendChild( el( 'ins', item.suggestion ) );
-				if ( item.explanation ) {
-					li.appendChild( el( 'span', item.explanation, 'description' ) );
-				}
-				var apply = el( 'button', cfg.i18n.apply, 'button button-small' );
-				apply.type = 'button';
-				apply.addEventListener( 'click', function () {
-					apply.disabled = true;
-					post( 'wpllmml_apply_fix', { post: postId, original: item.original, suggestion: item.suggestion } ).then( function ( r ) {
-						apply.textContent = r && r.success && r.data.applied ? cfg.i18n.applied : cfg.i18n.notFound;
-					} );
-				} );
-				li.appendChild( apply );
-				list.appendChild( li );
-			} );
-			out.appendChild( list );
-		} ).catch( function () {
-			button.disabled = false;
-			out.textContent = cfg.i18n.error;
-		} );
+		var menu = button.closest( 'details' );
+		if ( menu ) {
+			menu.open = false;
+		}
+		openSpell( button.getAttribute( 'data-post' ), !! button.getAttribute( 'data-editor' ) );
 	} );
 
 	// Layout sync (post lists): start an update that waits (WP-Cron does not
