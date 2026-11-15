@@ -5,6 +5,9 @@ release-notes tonen de regels die sinds de vorige release zijn toegevoegd.
 
 ## 15 november 2026
 
+- Een pagina vertalen met AI geeft geen "504 Gateway Time-out" meer: de vertaling loopt op de server op de achtergrond en het scherm toont de verstreken tijd. De hele pagina gaat in één keer naar de AI, zodat de vertaling de samenhang van de tekst behoudt.
+- Annuleren kan met de knop Cancel. Sluit of verlaat je de pagina tijdens het vertalen, dan stopt de server ook, zelfs midden in het AI-verzoek. Er wordt dan niets opgeslagen en de bestaande tekst blijft staan. Per pagina loopt er hooguit één vertaling tegelijk.
+- De spinner naast "Working…" staat niet meer over de tekst heen.
 - "Fill empty … fields with AI" (Instellingen → Languages → Texts) laat nu een voortgangsbalk zien en vult de velden per groepje in; elk groepje wordt meteen opgeslagen. Een fout, zoals een verkeerde API-sleutel, staat er direct bij.
 - De andere AI-knoppen (vertalen met AI) en "Install language packs" tonen een melding met spinner zolang ze bezig zijn, en reageren niet op een tweede klik.
 - Eerste versie. Talen met eigen URL's (`/nl/…`, `/ro/…`); de Engelse URL's blijven zoals ze zijn.

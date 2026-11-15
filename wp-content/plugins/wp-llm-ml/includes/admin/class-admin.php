@@ -11,6 +11,7 @@
 namespace WPLLMML\Admin;
 
 use WPLLMML\Ai\Client;
+use WPLLMML\Ai\Job;
 use WPLLMML\Ai\Spellcheck;
 use WPLLMML\Ai\Translator;
 use WPLLMML\Duplicator;
@@ -77,6 +78,10 @@ class Admin {
 		add_action( 'wp_ajax_wpllmml_apply_fix', array( $this, 'ajax_apply_fix' ) );
 		add_action( 'wp_ajax_wpllmml_models', array( $this, 'ajax_models' ) );
 		add_action( 'wp_ajax_wpllmml_ai_strings_batch', array( $this, 'ajax_ai_strings_batch' ) );
+		add_action( 'wp_ajax_wpllmml_ai_post_start', array( $this, 'ajax_ai_post_start' ) );
+		add_action( 'wp_ajax_wpllmml_ai_post_run', array( $this, 'ajax_ai_post_run' ) );
+		add_action( 'wp_ajax_wpllmml_ai_post_status', array( $this, 'ajax_ai_post_status' ) );
+		add_action( 'wp_ajax_wpllmml_ai_post_cancel', array( $this, 'ajax_ai_post_cancel' ) );
 
 		if ( Languages::is_multilingual() ) {
 			add_action( 'add_meta_boxes', array( $this, 'add_meta_box' ), 10, 2 );
@@ -243,6 +248,17 @@ class Admin {
 					/* translators: 1: error message, 2: number of texts saved before the error */
 					'failed'       => __( 'Stopped: %1$s (%2$d texts translated before this were saved).', 'wp-llm-ml' ),
 					'leave'        => __( 'Translation is still running. Leave this page?', 'wp-llm-ml' ),
+					'preparing'    => __( 'Starting the translation…', 'wp-llm-ml' ),
+					/* translators: %s: elapsed time, e.g. 1:05 */
+					'postProgress' => __( 'Translating the whole page with AI… %s', 'wp-llm-ml' ),
+					/* translators: 1: elapsed time, 2: texts done, 3: total texts */
+					'postProgressParts' => __( 'Translating the whole page with AI… %1$s (%2$d of %3$d texts)', 'wp-llm-ml' ),
+					'cancel'       => __( 'Cancel', 'wp-llm-ml' ),
+					'cancelled'    => __( 'Cancelled. Nothing was changed.', 'wp-llm-ml' ),
+					'opening'      => __( 'Done. Opening the translation…', 'wp-llm-ml' ),
+					'retry'        => __( 'Try again', 'wp-llm-ml' ),
+					/* translators: %s: error message */
+					'stopped'      => __( 'Stopped: %s', 'wp-llm-ml' ),
 				),
 			)
 		);
@@ -1015,7 +1031,7 @@ class Admin {
 			<?php else : ?>
 				<a href="<?php echo esc_url( self::create_translation_url( $post->ID, $code ) ); ?>"><?php esc_html_e( 'Create', 'wp-llm-ml' ); ?></a>
 				<?php if ( Client::is_configured() ) : ?>
-					| <a class="wpllmml-busy" href="<?php echo esc_url( self::create_translation_url( $post->ID, $code, 'edit', true ) ); ?>"><?php esc_html_e( 'Create & translate with AI', 'wp-llm-ml' ); ?></a>
+					| <a class="wpllmml-ai-post" data-mode="create" data-source="<?php echo (int) $post->ID; ?>" data-lang="<?php echo esc_attr( $code ); ?>" href="<?php echo esc_url( self::create_translation_url( $post->ID, $code, 'edit', true ) ); ?>"><?php esc_html_e( 'Create & translate with AI', 'wp-llm-ml' ); ?></a>
 				<?php endif; ?>
 			<?php endif; ?>
 			</li>
@@ -1027,10 +1043,11 @@ class Admin {
 			if ( $source ) {
 				$url = wp_nonce_url( add_query_arg( array( 'action' => 'wpllmml_ai_translate', 'post' => $post->ID ), admin_url( 'admin-post.php' ) ), 'wpllmml_ai_translate_' . $post->ID );
 				printf(
-					'<p><a class="button wpllmml-confirm wpllmml-busy" href="%1$s">%2$s</a></p>',
+					'<p><a class="button wpllmml-confirm wpllmml-ai-post" data-mode="retranslate" data-post="%3$d" href="%1$s">%2$s</a></p>',
 					esc_url( $url ),
 					/* translators: %s: language name */
-					esc_html( sprintf( __( 'Translate from %s with AI', 'wp-llm-ml' ), Languages::get( Languages::default_code() )['name'] ) )
+					esc_html( sprintf( __( 'Translate from %s with AI', 'wp-llm-ml' ), Languages::get( Languages::default_code() )['name'] ) ),
+					(int) $post->ID
 				);
 			}
 			printf(
@@ -1277,6 +1294,138 @@ class Admin {
 		}
 		Strings::save( $table );
 		wp_send_json_success( array( 'translations' => (object) $out ) );
+	}
+
+	/**
+	 * Page translation with AI, step 1 (quick): create the translation draft if
+	 * asked and register the job. The browser then calls ..._run, which does the
+	 * work in the background, and polls ..._status.
+	 */
+	public function ajax_ai_post_start() {
+		check_ajax_referer( 'wpllmml_ajax' );
+		if ( ! Client::is_configured() ) {
+			wp_send_json_error( __( 'The AI provider is not configured (API key and model are required).', 'wp-llm-ml' ) );
+		}
+		$mode = isset( $_POST['mode'] ) ? sanitize_key( wp_unslash( $_POST['mode'] ) ) : '';
+		if ( 'create' === $mode ) {
+			$source = isset( $_POST['source'] ) ? absint( $_POST['source'] ) : 0;
+			$lang   = isset( $_POST['lang'] ) ? sanitize_key( wp_unslash( $_POST['lang'] ) ) : '';
+			$type   = get_post_type_object( (string) get_post_type( $source ) );
+			if ( ! $type || ! current_user_can( 'edit_post', $source ) || ! current_user_can( $type->cap->create_posts ) ) {
+				wp_send_json_error( __( 'You are not allowed to do this.', 'wp-llm-ml' ), 403 );
+			}
+			$post_id = Translations::get_translation( $source, $lang );
+			if ( ! $post_id ) {
+				// An earlier attempt may already have created the draft; reuse it then.
+				$post_id = Duplicator::create( $source, $lang );
+				if ( is_wp_error( $post_id ) ) {
+					wp_send_json_error( $post_id->get_error_message() );
+				}
+			}
+			$from = Translations::get_lang( $source );
+		} else {
+			$post_id = isset( $_POST['post'] ) ? absint( $_POST['post'] ) : 0;
+			if ( ! get_post( $post_id ) || ! current_user_can( 'edit_post', $post_id ) ) {
+				wp_send_json_error( __( 'You are not allowed to do this.', 'wp-llm-ml' ), 403 );
+			}
+			$lang = Translations::get_lang( $post_id );
+			$from = Languages::default_code();
+		}
+		$job = Job::start( $post_id, $from, $lang );
+		if ( is_wp_error( $job ) ) {
+			wp_send_json_error( $job->get_error_message(), 409 );
+		}
+		wp_send_json_success(
+			array(
+				'post'  => (int) $post_id,
+				'token' => $job['token'],
+			)
+		);
+	}
+
+	/**
+	 * Page translation, step 2: answer the browser at once, then translate the
+	 * whole page in this same request on the server. Its own response is not
+	 * waited for, so a gateway timeout cannot interrupt the editor.
+	 */
+	public function ajax_ai_post_run() {
+		check_ajax_referer( 'wpllmml_ajax' );
+		$post_id = isset( $_POST['post'] ) ? absint( $_POST['post'] ) : 0;
+		$token   = isset( $_POST['token'] ) ? sanitize_text_field( wp_unslash( $_POST['token'] ) ) : '';
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			wp_send_json_error( __( 'You are not allowed to do this.', 'wp-llm-ml' ), 403 );
+		}
+		self::respond_and_continue( array( 'started' => true ) );
+		Job::run( $post_id, $token );
+		exit;
+	}
+
+	/**
+	 * Page translation, step 3 (repeated): the browser's heartbeat and status poll.
+	 */
+	public function ajax_ai_post_status() {
+		check_ajax_referer( 'wpllmml_ajax' );
+		$post_id = isset( $_POST['post'] ) ? absint( $_POST['post'] ) : 0;
+		$token   = isset( $_POST['token'] ) ? sanitize_text_field( wp_unslash( $_POST['token'] ) ) : '';
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			wp_send_json_error( __( 'You are not allowed to do this.', 'wp-llm-ml' ), 403 );
+		}
+		$status = Job::status( $post_id, $token );
+		if ( 'done' === $status['status'] ) {
+			Job::clear( $post_id );
+			self::store_flash( array( 'wpllmml_msg' => rawurlencode( __( 'Translated with AI. Please review the text before publishing.', 'wp-llm-ml' ) ) ) );
+			$status['redirect'] = (string) get_edit_post_link( $post_id, 'raw' );
+		}
+		wp_send_json_success( $status );
+	}
+
+	/**
+	 * Stop a running page translation (Cancel button, or the editor leaving the page).
+	 */
+	public function ajax_ai_post_cancel() {
+		check_ajax_referer( 'wpllmml_ajax' );
+		$post_id = isset( $_POST['post'] ) ? absint( $_POST['post'] ) : 0;
+		$token   = isset( $_POST['token'] ) ? sanitize_text_field( wp_unslash( $_POST['token'] ) ) : '';
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			wp_send_json_error( __( 'You are not allowed to do this.', 'wp-llm-ml' ), 403 );
+		}
+		wp_send_json_success( array( 'cancelled' => Job::cancel( $post_id, $token ) ) );
+	}
+
+	/**
+	 * Send a JSON success response and close the connection, then let PHP
+	 * continue (PHP-FPM, LiteSpeed, or Content-Length + Connection: close).
+	 *
+	 * @param array $data Response data.
+	 */
+	private static function respond_and_continue( array $data ) {
+		ignore_user_abort( true );
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 900 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
+		}
+		$json = (string) wp_json_encode(
+			array(
+				'success' => true,
+				'data'    => $data,
+			)
+		);
+		while ( ob_get_level() > 0 ) {
+			ob_end_clean();
+		}
+		if ( ! headers_sent() ) {
+			header( 'Content-Type: application/json; charset=' . get_option( 'blog_charset' ) );
+			header( 'Content-Length: ' . strlen( $json ) );
+			header( 'Connection: close' );
+			header( 'Cache-Control: no-store' );
+		}
+		echo $json; // phpcs:ignore WordPress.Security.EscapeOutput
+		if ( function_exists( 'fastcgi_finish_request' ) ) {
+			fastcgi_finish_request();
+		} elseif ( function_exists( 'litespeed_finish_request' ) ) {
+			litespeed_finish_request();
+		} else {
+			flush();
+		}
 	}
 
 	/**

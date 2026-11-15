@@ -16,7 +16,7 @@ AI_PORT=8891
 
 PHP_CLI_SERVER_WORKERS=4 php -S "localhost:$PORT" -t "$WORK/site" "$REPO/tests/bin/router.php" > "$WORK/server.log" 2>&1 &
 SITE_PID=$!
-php -S "localhost:$AI_PORT" "$REPO/tests/fixtures/mock-ai.php" > "$WORK/mock-ai.log" 2>&1 &
+PHP_CLI_SERVER_WORKERS=2 php -S "localhost:$AI_PORT" "$REPO/tests/fixtures/mock-ai.php" > "$WORK/mock-ai.log" 2>&1 &
 AI_PID=$!
 trap 'kill $SITE_PID $AI_PID 2>/dev/null || true' EXIT
 sleep 1
