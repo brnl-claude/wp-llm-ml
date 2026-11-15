@@ -1667,7 +1667,8 @@ class Admin {
 			$suggestion = wp_kses_post( $suggestion );
 		}
 		$field  = isset( $_POST['field'] ) && '' !== $_POST['field'] ? absint( $_POST['field'] ) : null;
-		$result = ( new Spellcheck() )->apply( $post_id, $original, $suggestion, $field );
+		$before = isset( $_POST['before'] ) ? (string) wp_unslash( $_POST['before'] ) : null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- only compared.
+		$result = ( new Spellcheck() )->apply( $post_id, $original, $suggestion, $field, $before );
 		if ( is_wp_error( $result ) ) {
 			wp_send_json_error( $result->get_error_message() );
 		}
