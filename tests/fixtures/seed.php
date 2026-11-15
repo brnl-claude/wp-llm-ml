@@ -289,7 +289,7 @@ if ( class_exists( 'WPLLMML\\Settings' ) ) {
 function wpllmml_seed_settings() {
 	$settings                  = WPLLMML\Settings::all();
 	$settings['languages']     = array(
-		array( 'code' => 'en', 'locale' => 'en_US', 'name' => 'English' ),
+		array( 'code' => 'en', 'locale' => 'en_GB', 'name' => 'English' ), // The owner prefers UK English.
 		array( 'code' => 'nl', 'locale' => 'nl_NL', 'name' => 'Nederlands' ),
 		array( 'code' => 'ro', 'locale' => 'ro_RO', 'name' => 'Română' ),
 	);

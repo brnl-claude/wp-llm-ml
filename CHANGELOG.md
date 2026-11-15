@@ -14,3 +14,4 @@ release-notes tonen de regels die sinds de vorige release zijn toegevoegd.
 - Sitetitel, tagline, menulabels, categorienamen, widgetteksten en de copyrightregel zijn te vertalen onder Instellingen → Languages → Texts; widgets kunnen per taal getoond worden.
 - Optioneel: vertalen en spelling controleren met AI via HostYourAI of een andere OpenAI-compatibele dienst, alleen als je op de knop klikt.
 - Nieuwe versies verschijnen onder Dashboard → Updates.
+- Per taal kies je de variant, bijvoorbeeld English (UK) in plaats van English (US): spelling, datumnotatie, `<html lang="en-GB">` en het WordPress-taalpakket volgen die keuze, de URL's blijven gelijk. Kies je onder Instellingen → Algemeen een andere sitetaal, dan schakelt de plugin mee.

@@ -87,7 +87,7 @@ check( 'canonical is the Dutch URL', false !== strpos( $nl, '<link rel="canonica
 $alts = array_combine( all( '/<link rel="alternate" hreflang="([^"]+)" href="([^"]+)"/', $nl ), all( '/<link rel="alternate" hreflang="([^"]+)" href="([^"]+)"/', $nl, 2 ) );
 check( 'hreflang en + nl + x-default', array( 'en' => $base . '/gestalt-therapy/', 'nl' => $base . '/nl/gestalt-therapie/', 'x-default' => $base . '/gestalt-therapy/' ) === $alts, $alts );
 check( 'og:locale nl_NL (Yoast)', false !== strpos( $nl, '<meta property="og:locale" content="nl_NL"' ) );
-check( 'og:locale:alternate en_US', false !== strpos( $nl, '<meta property="og:locale:alternate" content="en_US"' ) );
+check( 'og:locale:alternate en_GB', false !== strpos( $nl, '<meta property="og:locale:alternate" content="en_GB"' ) );
 check( 'schema inLanguage nl-NL (Yoast)', (bool) preg_match( '/"inLanguage":\s*"nl-NL"/', $nl ) );
 check( 'site title translated in <title>', false !== strpos( $nl, '<title>Gestalttherapie - De Bibliotheek Binnenin</title>' ) );
 
@@ -113,7 +113,9 @@ check( 'detection script present, no redirect from nl', false !== strpos( $nl, '
 
 section( 'English pages unchanged' );
 list( , , $en ) = fetch( $base . '/gestalt-therapy/' );
-check( '<html lang="en-US">', false !== strpos( $en, '<html lang="en-US"' ) );
+check( '<html lang="en-GB"> (UK English variant)', false !== strpos( $en, '<html lang="en-GB"' ) );
+check( 'og:locale en_GB (Yoast)', false !== strpos( $en, '<meta property="og:locale" content="en_GB"' ) );
+check( 'hreflang stays language-only "en"', false !== strpos( $en, '<link rel="alternate" hreflang="en" href="' . $base . '/gestalt-therapy/"' ) );
 check( 'English title', false !== strpos( $en, '<title>Gestalt Therapy - The Library Within</title>' ) );
 check( 'English Elementor link untouched', false !== strpos( $en, 'href="' . $base . '/book-consult/"' ) );
 check( 'nl-only widget hidden in en', false === strpos( $en, 'NL-ONLY-WIDGET' ) );

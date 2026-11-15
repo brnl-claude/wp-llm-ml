@@ -34,7 +34,9 @@ zelf instelt.
 2. WordPress → **Plugins → Nieuwe plugin → Plugin uploaden** → zip kiezen → **Nu installeren** → **Activeren**.
    Doe dit eerst op een testsite/staging.
 3. **Instellingen → Languages**:
-   - Voeg *Nederlands* en *Română* toe (Engels blijft standaard).
+   - Voeg *Nederlands* en *Română* toe (Engels blijft standaard) en kies bij Engels de variant
+     **English (UK) — en_GB** (de live site draait nu op en_US; de variant bepaalt spelling,
+     datumnotatie en `<html lang>`, niet de URL's).
    - Klik **Install language packs** (vertaalt knoppen, datums, formulier-meldingen).
    - *Switcher in menu*: **Primary Menu** (GeneratePress). Tip: "Language code (NL)" is compacter in het menu.
 4. Pagina's → kolom **Languages** → klik `+NL` bij een pagina → vertaal in Elementor → publiceer.
@@ -74,7 +76,7 @@ tests/package.sh        # bouwt de zip, installeert hem in een verse site en tes
 bin/build-zip.sh        # alleen de zip bouwen → dist/wp-llm-ml.zip
 ```
 
-Vier suites (153 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
+Vier suites (161 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
 queries), HTTP (routing, redirects, hreflang, menu's, switcher, links, lijsten, REST, sitemaps) en
 AI (tegen een nep-OpenAI-server: Elementor-teksten, repeaters, Yoast-velden, spellingscontrole, Abilities)
 en package (zip installeren in een verse site, activeren, updaten via de WordPress-upgrader).

@@ -13,6 +13,17 @@ use WPLLMML\Translations;
 require_once __DIR__ . '/assert.php';
 wp_set_current_user( 1 );
 
+/**
+ * Stored locale of the default language.
+ *
+ * @return string
+ */
+function wpllmml_default_variant() {
+	WPLLMML\Settings::flush();
+	$lang = WPLLMML\Languages::get( WPLLMML\Languages::default_code() );
+	return $lang['locale'];
+}
+
 $by_path = static function ( $path, $type = 'page' ) {
 	$post = get_page_by_path( $path, OBJECT, $type );
 	return $post ? (int) $post->ID : 0;
@@ -39,6 +50,18 @@ section( 'Languages' );
 check( 'three languages configured', WPLLMML\Languages::codes() === array( 'en', 'nl', 'ro' ) );
 check( 'default is en', 'en' === WPLLMML\Languages::default_code() );
 check( 'existing page counts as default language', 'en' === Translations::get_lang( $gestalt ) );
+check( 'default language uses the UK English variant', 'en_GB' === wpllmml_default_variant() );
+check( 'variants offered for English include UK and US', isset( WPLLMML\Languages::variants( 'en' )['en_GB'], WPLLMML\Languages::variants( 'en' )['en_US'] ) );
+check( 'Dutch has a Belgian variant, Romanian just ro_RO', isset( WPLLMML\Languages::variants( 'nl' )['nl_BE'] ) && array( 'ro_RO' ) === array_keys( WPLLMML\Languages::variants( 'ro' ) ) );
+
+section( 'Site language follows Settings → General' );
+$admin = new WPLLMML\Admin\Admin( WPLLMML\Plugin::instance()->router );
+$admin->sync_site_language( 'en_GB', '' ); // Site Language set to English (United States).
+check( 'English (US) chosen in WordPress → default variant en_US', 'en_US' === wpllmml_default_variant() );
+$admin->sync_site_language( '', 'nl_NL' ); // Another language entirely: leave the default alone.
+check( 'a different language does not change the default variant', 'en_US' === wpllmml_default_variant() );
+$admin->sync_site_language( '', 'en_GB' );
+check( 'English (UK) chosen in WordPress → default variant en_GB', 'en_GB' === wpllmml_default_variant() );
 
 section( 'Create translation of an Elementor page' );
 $raw_before = get_post_meta( $gestalt, '_elementor_data', true );

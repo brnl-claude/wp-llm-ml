@@ -50,6 +50,16 @@ class Admin {
 	 */
 	public function boot() {
 		add_action( 'admin_menu', array( $this, 'menu' ) );
+		// Settings → General → Site Language also sets the default language's variant.
+		add_action( 'update_option_WPLANG', array( $this, 'sync_site_language' ), 10, 2 );
+		add_action(
+			'add_option_WPLANG',
+			function ( $option, $value ) {
+				$this->sync_site_language( '', $value );
+			},
+			10,
+			2
+		);
 		add_action( 'admin_enqueue_scripts', array( $this, 'assets' ) );
 		add_action( 'admin_notices', array( $this, 'notices' ) );
 		add_filter( 'plugin_action_links_' . plugin_basename( WPLLMML_FILE ), array( $this, 'action_links' ) );
@@ -148,6 +158,26 @@ class Admin {
 			wp_die( esc_html__( 'You are not allowed to do this.', 'wp-llm-ml' ), 403 );
 		}
 		check_admin_referer( $action );
+	}
+
+	/**
+	 * When the WordPress site language changes to another variant of the
+	 * default language (English (US) → English (UK)), follow it.
+	 *
+	 * @param mixed $old_value Previous WPLANG.
+	 * @param mixed $new_value New WPLANG ('' means English (US)).
+	 */
+	public function sync_site_language( $old_value, $new_value ) {
+		$locale = '' !== (string) $new_value ? (string) $new_value : 'en_US';
+		$code   = strtolower( (string) strtok( $locale, '_' ) );
+		$s      = Settings::all();
+		foreach ( (array) $s['languages'] as $i => $row ) {
+			if ( isset( $row['code'] ) && $row['code'] === Languages::default_code() && $row['code'] === $code && ( ! isset( $row['locale'] ) || $row['locale'] !== $locale ) ) {
+				$s['languages'][ $i ]['locale'] = $locale;
+				Settings::save( $s );
+				return;
+			}
+		}
 	}
 
 	/* ------------------------------------------------------------------
@@ -321,12 +351,12 @@ class Admin {
 			<input type="hidden" name="action" value="wpllmml_save_settings">
 			<?php wp_nonce_field( 'wpllmml_save_settings' ); ?>
 			<h2><?php esc_html_e( 'Languages', 'wp-llm-ml' ); ?></h2>
-			<p class="description"><?php esc_html_e( 'The default language keeps the current URLs. Other languages get a prefix, for example /nl/.', 'wp-llm-ml' ); ?></p>
+			<p class="description"><?php esc_html_e( 'The default language keeps the current URLs. Other languages get a prefix, for example /nl/. The variant only changes spelling, date formats and the WordPress language pack (for example English (UK) instead of English (US)); URLs and hreflang stay the same.', 'wp-llm-ml' ); ?></p>
 			<table class="widefat striped wpllmml-languages">
 				<thead><tr>
 					<th><?php esc_html_e( 'Default', 'wp-llm-ml' ); ?></th>
 					<th><?php esc_html_e( 'Code (URL)', 'wp-llm-ml' ); ?></th>
-					<th><?php esc_html_e( 'WordPress locale', 'wp-llm-ml' ); ?></th>
+					<th><?php esc_html_e( 'Variant (spelling, dates, language pack)', 'wp-llm-ml' ); ?></th>
 					<th><?php esc_html_e( 'Name (as shown to visitors)', 'wp-llm-ml' ); ?></th>
 					<th><?php esc_html_e( 'Remove', 'wp-llm-ml' ); ?></th>
 				</tr></thead>
@@ -335,7 +365,23 @@ class Admin {
 					<tr>
 						<td><input type="radio" name="default" value="<?php echo esc_attr( $lang['code'] ); ?>" <?php checked( Languages::default_code(), $lang['code'] ); ?> aria-label="<?php esc_attr_e( 'Default language', 'wp-llm-ml' ); ?>"></td>
 						<td><input type="text" class="small-text" name="languages[<?php echo (int) $i; ?>][code]" value="<?php echo esc_attr( $lang['code'] ); ?>" readonly></td>
-						<td><input type="text" class="regular-text" name="languages[<?php echo (int) $i; ?>][locale]" value="<?php echo esc_attr( $lang['locale'] ); ?>"></td>
+						<td>
+							<?php $variants = Languages::variants( $lang['code'] ); ?>
+							<?php if ( $variants ) : ?>
+								<?php
+								if ( ! isset( $variants[ $lang['locale'] ] ) ) {
+									$variants = array( $lang['locale'] => $lang['locale'] ) + $variants;
+								}
+								?>
+								<select name="languages[<?php echo (int) $i; ?>][locale]" aria-label="<?php esc_attr_e( 'Variant', 'wp-llm-ml' ); ?>">
+									<?php foreach ( $variants as $locale => $label ) : ?>
+										<option value="<?php echo esc_attr( $locale ); ?>" <?php selected( $lang['locale'], $locale ); ?>><?php echo esc_html( $label . ' — ' . $locale ); ?></option>
+									<?php endforeach; ?>
+								</select>
+							<?php else : ?>
+								<input type="text" class="regular-text" name="languages[<?php echo (int) $i; ?>][locale]" value="<?php echo esc_attr( $lang['locale'] ); ?>">
+							<?php endif; ?>
+						</td>
 						<td><input type="text" class="regular-text" name="languages[<?php echo (int) $i; ?>][name]" value="<?php echo esc_attr( $lang['name'] ); ?>"></td>
 						<td><?php if ( Languages::default_code() !== $lang['code'] ) : ?><input type="checkbox" name="languages[<?php echo (int) $i; ?>][remove]" value="1" aria-label="<?php esc_attr_e( 'Remove', 'wp-llm-ml' ); ?>"><?php endif; ?></td>
 					</tr>

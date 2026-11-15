@@ -72,6 +72,62 @@ class Languages {
 	}
 
 	/**
+	 * Regional variants (WordPress locales) per language code. The variant
+	 * decides spelling and formats (en_GB: "colour", 15 November 2026) and the
+	 * WordPress language pack that is loaded; URLs and hreflang stay "/en/", "en".
+	 *
+	 * @param string $code Language code.
+	 * @return array locale => label (empty for languages outside the catalog).
+	 */
+	public static function variants( $code ) {
+		$list = array(
+			'de' => array(
+				'de_DE' => 'Deutsch (Deutschland)',
+				'de_AT' => 'Deutsch (Österreich)',
+				'de_CH' => 'Deutsch (Schweiz)',
+			),
+			'en' => array(
+				'en_GB' => 'English (UK)',
+				'en_US' => 'English (US)',
+				'en_AU' => 'English (Australia)',
+				'en_CA' => 'English (Canada)',
+				'en_NZ' => 'English (New Zealand)',
+				'en_ZA' => 'English (South Africa)',
+			),
+			'es' => array(
+				'es_ES' => 'Español (España)',
+				'es_MX' => 'Español (México)',
+				'es_AR' => 'Español (Argentina)',
+				'es_CO' => 'Español (Colombia)',
+			),
+			'fr' => array(
+				'fr_FR' => 'Français (France)',
+				'fr_BE' => 'Français (Belgique)',
+				'fr_CA' => 'Français (Canada)',
+			),
+			'nl' => array(
+				'nl_NL' => 'Nederlands (Nederland)',
+				'nl_BE' => 'Nederlands (België)',
+			),
+			'pt' => array(
+				'pt_PT' => 'Português (Portugal)',
+				'pt_BR' => 'Português (Brasil)',
+			),
+			'zh' => array(
+				'zh_CN' => '中文 (简体)',
+				'zh_TW' => '中文 (繁體)',
+			),
+		);
+		$list = (array) apply_filters( 'wpllmml_language_variants', $list );
+		if ( isset( $list[ $code ] ) ) {
+			return $list[ $code ];
+		}
+		// Languages with one variant offer just that one.
+		$catalog = self::catalog();
+		return isset( $catalog[ $code ] ) ? array( $catalog[ $code ]['locale'] => $catalog[ $code ]['name'] ) : array();
+	}
+
+	/**
 	 * All configured languages, default language first.
 	 *
 	 * @return array code => [code, locale, name, english, rtl]
