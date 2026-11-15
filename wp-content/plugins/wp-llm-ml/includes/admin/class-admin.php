@@ -166,6 +166,10 @@ class Admin {
 			/* translators: 1: number of texts, 2: language name */
 			$parts[] = sprintf( _n( '%1$d new text is still in %2$s.', '%1$d new texts are still in %2$s.', (int) $review['untranslated'], 'wp-llm-ml' ), (int) $review['untranslated'], $default_name );
 		}
+		if ( ! empty( $review['error'] ) ) {
+			/* translators: %s: error message */
+			$parts[] = sprintf( __( 'AI translation failed: %s', 'wp-llm-ml' ), $review['error'] );
+		}
 		$parts[] = __( 'Please review (saving the page in Elementor marks it as reviewed).', 'wp-llm-ml' );
 		return implode( ' ', $parts );
 	}
@@ -969,7 +973,8 @@ class Admin {
 		$can_edit     = current_user_can( 'edit_post', $post_id );
 		$builder      = 'builder' === get_post_meta( $post_id, '_elementor_edit_mode', true ) && did_action( 'elementor/loaded' );
 		$default_name = Languages::get( Languages::default_code() )['name'];
-		echo '<div class="wpllmml-langs-cell" data-wpllmml-job-host="1"><span class="wpllmml-langs">';
+		$sync_source  = 0;
+		ob_start();
 		foreach ( Languages::all() as $code => $lang ) {
 			$label = strtoupper( $code );
 			if ( $code === $own ) {
@@ -1005,9 +1010,18 @@ class Admin {
 					);
 				}
 				$syncing = false;
+				$failed  = false;
 				if ( $own === Languages::default_code() && Fields::is_elementor( $post_id ) && Fields::is_elementor( $tid ) && current_user_can( 'edit_post', $tid ) ) {
 					$follows = Sync::follows( $tid );
-					$syncing = $follows && Sync::is_pending( $tid );
+					$state   = $follows ? Sync::state( $tid ) : '';
+					$syncing = in_array( $state, array( 'queued', 'running', 'stalled' ), true );
+					$failed  = 'error' === $state;
+					if ( in_array( $state, array( 'queued', 'stalled' ), true ) ) {
+						$sync_source = (int) $post_id;
+					}
+					if ( $failed || 'stalled' === $state ) {
+						$items[] = sprintf( '<button type="button" class="wpllmml-sync-now" data-source="%1$d">%2$s</button>', (int) $post_id, esc_html__( 'Update now', 'wp-llm-ml' ) );
+					}
 					$items[] = sprintf(
 						'<a href="%1$s" class="wpllmml-follow">%2$s</a>',
 						esc_url( self::action_url( 'wpllmml_follow', $tid, array( 'on' => $follows ? 0 : 1 ) ) ),
@@ -1022,6 +1036,9 @@ class Admin {
 					if ( $syncing ) {
 						/* translators: %s: language name */
 						$notes[] = sprintf( __( 'Updating from the %s page…', 'wp-llm-ml' ), $default_name );
+					} elseif ( $failed ) {
+						/* translators: %s: error message */
+						$notes[] = sprintf( __( 'The last update failed: %s', 'wp-llm-ml' ), Sync::error( $tid ) );
 					}
 				}
 				if ( $notes ) {
@@ -1029,7 +1046,7 @@ class Admin {
 				}
 				$status_object = get_post_status_object( $status );
 				self::print_lang_menu(
-					'is-' . $status . ( $review ? ' has-review' : '' ) . ( $syncing ? ' is-syncing' : '' ),
+					'is-' . $status . ( $review ? ' has-review' : '' ) . ( $syncing ? ' is-syncing' : '' ) . ( $failed ? ' has-sync-error' : '' ),
 					$label,
 					/* translators: 1: language, 2: status */
 					trim( sprintf( __( '%1$s translation (%2$s)', 'wp-llm-ml' ), $lang['name'], $status_object ? $status_object->label : $status ) . ' ' . implode( ' ', $notes ) ),
@@ -1064,6 +1081,10 @@ class Admin {
 				$code
 			);
 		}
+		$badges = ob_get_clean();
+		// A waiting layout update is started from here (see admin.js).
+		printf( '<div class="wpllmml-langs-cell" data-wpllmml-job-host="1"%s><span class="wpllmml-langs">', $sync_source ? ' data-wpllmml-sync-source="' . (int) $sync_source . '"' : '' );
+		echo $badges; // phpcs:ignore WordPress.Security.EscapeOutput -- escaped when built.
 		echo '</span></div>';
 	}
 
@@ -1583,7 +1604,7 @@ class Admin {
 	 *
 	 * @param array $data Response data.
 	 */
-	private static function respond_and_continue( array $data ) {
+	public static function respond_and_continue( array $data ) {
 		ignore_user_abort( true );
 		if ( function_exists( 'set_time_limit' ) ) {
 			@set_time_limit( 900 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors

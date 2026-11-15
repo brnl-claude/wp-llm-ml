@@ -60,6 +60,21 @@
 	var t = cfg.i18n;
 	var hasMenu = typeof ui.Menu === 'function' || ( ui.Menu && typeof ui.Menu === 'object' );
 	var running = null; // The AI job in progress: { code, post, token, started }.
+	var kicked = {}; // source id => when this screen last started its sync.
+
+	function isSyncing( lang ) {
+		return 'queued' === lang.sync || 'running' === lang.sync || 'stalled' === lang.sync;
+	}
+
+	// Run a waiting layout update in a request of our own: it answers at once
+	// and continues on the server, so it does not depend on WP-Cron.
+	function kick( source, force ) {
+		if ( ! source || ( ! force && kicked[ source ] && Date.now() - kicked[ source ] < 30000 ) ) {
+			return;
+		}
+		kicked[ source ] = Date.now();
+		ajax( 'wpllmml_sync_run', { source: source } ).catch( function () {} );
+	}
 
 	function fmt( str ) {
 		var args = Array.prototype.slice.call( arguments, 1 );
@@ -153,8 +168,10 @@
 			} else if ( false === lang.follows ) {
 				lines.push( t.ownLayout );
 			}
-			if ( lang.syncing ) {
+			if ( isSyncing( lang ) ) {
 				lines.push( t.syncing );
+			} else if ( 'error' === lang.sync ) {
+				lines.push( fmt( t.syncFailed, lang.syncError ) );
 			}
 			if ( lang.review ) {
 				lines.push( lang.review );
@@ -239,21 +256,26 @@
 			wasDirty.current = dirty;
 		}, [ dirty ] );
 
-		// Poll while a translation is being updated from the source page.
-		var syncing = !! ( group && group.languages.some( function ( l ) {
-			return l.syncing;
+		// Poll while a translation is being updated from the source page, and
+		// start the update when it waits.
+		var syncing = !! ( group && group.languages.some( isSyncing ) );
+		var waiting = !! ( group && group.languages.some( function ( l ) {
+			return 'queued' === l.sync || 'stalled' === l.sync;
 		} ) );
 		React.useEffect( function () {
+			if ( waiting && group ) {
+				kick( group.source );
+			}
 			if ( ! syncing || ! id ) {
 				return undefined;
 			}
 			var timer = setTimeout( function () {
 				refresh( id );
-			}, 4000 );
+			}, 3000 );
 			return function () {
 				clearTimeout( timer );
 			};
-		}, [ syncing, group, id ] );
+		}, [ syncing, waiting, group, id ] );
 
 		// Elapsed-time display while the AI works.
 		React.useEffect( function () {
@@ -379,12 +401,21 @@
 					markReviewed( lang );
 				} } );
 			}
+			if ( 'error' === lang.sync || 'stalled' === lang.sync ) {
+				items.push( { label: t.syncRetry, action: 'sync-retry', onClick: function () {
+					setMenu( null );
+					kick( group.source, true );
+					setTimeout( function () {
+						refresh( id );
+					}, 1500 );
+				} } );
+			}
 			return items;
 		}
 
 		function onClick( lang, event ) {
 			var target = event.currentTarget;
-			if ( lang.id && lang.id !== id && ! lang.review && ! ( job && job.code === lang.code ) ) {
+			if ( lang.id && lang.id !== id && ! lang.review && 'error' !== lang.sync && ! ( job && job.code === lang.code ) ) {
 				open( lang );
 				return;
 			}
@@ -411,8 +442,11 @@
 			if ( lang.review ) {
 				classes.push( 'has-review' );
 			}
-			if ( lang.syncing || working ) {
+			if ( isSyncing( lang ) || working ) {
 				classes.push( 'is-busy' );
+			}
+			if ( 'error' === lang.sync ) {
+				classes.push( 'has-error' );
 			}
 			var title = working ? fmt( t.working, elapsed( job.started ) ) : describe( lang, isActive ).join( '\n' );
 			return h(

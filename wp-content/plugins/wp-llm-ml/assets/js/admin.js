@@ -485,6 +485,62 @@
 		} );
 	} );
 
+	// Layout sync (post lists): start an update that waits (WP-Cron does not
+	// run on every host) and follow it until it is done.
+	function watchSync( cell, source ) {
+		if ( cell.wpllmmlSync ) {
+			return;
+		}
+		cell.wpllmmlSync = true;
+		post( 'wpllmml_sync_run', { source: source } ).catch( function () {} );
+		var rounds = 0;
+		function poll() {
+			setTimeout( function () {
+				post( 'wpllmml_editor_group', { post: source } ).then( function ( res ) {
+					var busy = false;
+					( res && res.success && res.data ? res.data.languages : [] ).forEach( function ( lang ) {
+						var badge = cell.querySelector( 'details[data-lang="' + lang.code + '"] > summary' );
+						if ( ! badge || ! lang.id ) {
+							return;
+						}
+						var syncing = 'queued' === lang.sync || 'running' === lang.sync || 'stalled' === lang.sync;
+						busy = busy || syncing;
+						badge.classList.toggle( 'is-syncing', syncing );
+						badge.classList.toggle( 'has-sync-error', 'error' === lang.sync );
+						badge.classList.toggle( 'has-review', !! lang.review );
+						if ( 'error' === lang.sync && lang.syncError ) {
+							badge.title = lang.syncError;
+						}
+					} );
+					if ( busy && ++rounds < 300 ) {
+						poll();
+					} else {
+						cell.wpllmmlSync = false;
+					}
+				} ).catch( function () {
+					cell.wpllmmlSync = false;
+				} );
+			}, 3000 );
+		}
+		poll();
+	}
+	document.querySelectorAll( '[data-wpllmml-sync-source]' ).forEach( function ( cell ) {
+		watchSync( cell, cell.getAttribute( 'data-wpllmml-sync-source' ) );
+	} );
+	document.addEventListener( 'click', function ( e ) {
+		var button = e.target.closest ? e.target.closest( '.wpllmml-sync-now' ) : null;
+		if ( ! button ) {
+			return;
+		}
+		e.preventDefault();
+		var menu = button.closest( 'details' );
+		if ( menu ) {
+			menu.open = false;
+			menu.querySelector( 'summary' ).classList.add( 'is-syncing' );
+		}
+		watchSync( button.closest( '.wpllmml-langs-cell' ), button.getAttribute( 'data-source' ) );
+	} );
+
 	// Load models into the datalist on the AI tab.
 	var load = document.getElementById( 'wpllmml-load-models' );
 	if ( load ) {

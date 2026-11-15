@@ -33,6 +33,8 @@ echo "== Sync tests";   WPLLMML_MOCK_AI="http://localhost:$AI_PORT/v1" php "$REP
 if [ "${WPLLMML_BROWSER:-auto}" != 0 ] && ( cd "$REPO" && node -e "require('playwright')" ) 2>/dev/null; then
 	echo "== Browser tests (Elementor editor)"
 	WPLLMML_MOCK_AI="http://localhost:$AI_PORT/v1" php "$REPO/tests/bin/wp-eval.php" "$WORK/site" "$REPO/tests/fixtures/ai-on.php" || status=1
+	# Without WP-Cron, as on hosts where it does not run: the editor starts the sync.
+	mkdir -p "$WORK/site/wp-content/mu-plugins" && cp "$REPO/tests/fixtures/no-cron.php" "$WORK/site/wp-content/mu-plugins/"
 	node "$REPO/tests/browser/elementor-switcher.js" "http://localhost:$PORT" "$WORK/ids.json" "${WPLLMML_SHOTS:-}" || status=1
 elif [ "${WPLLMML_BROWSER:-auto}" = 1 ]; then
 	echo "== Browser tests: Playwright not found (npm install playwright)"; status=1
