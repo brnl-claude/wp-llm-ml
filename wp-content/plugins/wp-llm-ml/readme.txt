@@ -4,7 +4,7 @@ Tags: multilingual, translation, language switcher, hreflang, elementor
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.1.0
+Stable tag: 0.0.0-dev
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -45,7 +45,4 @@ Yes. The language is part of the URL and browser detection runs in the browser.
 
 == Changelog ==
 
-= 0.1.0 =
-* First release: languages with /xx/ URL prefixes, Elementor-safe translations, browser language detection, language switcher (menu, Elementor widget, widget, shortcode), hreflang/Yoast integration, string and widget translations, REST API and Abilities.
-* Optional AI translation and spell checking through an OpenAI-compatible API (default: HostYourAI).
-* Updates from GitHub Releases appear under Dashboard → Updates.
+See CHANGELOG.md and the GitHub releases: https://github.com/brnl-claude/wp-llm-ml/releases

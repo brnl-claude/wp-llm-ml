@@ -3,7 +3,7 @@
  * Plugin Name:       LLM Multilingual
  * Plugin URI:        https://github.com/brnl-claude/wp-llm-ml
  * Description:       Lightweight multilingual plugin without nags, upsells or tracking. One page per language with /nl/-style URL prefixes, browser language detection, a language switcher, hreflang and AI-friendly output, Elementor and GeneratePress support, and optional AI translation and spell checking through any OpenAI-compatible API (for example HostYourAI).
- * Version:           0.1.0
+ * Version:           0.0.0-dev
  * Requires at least: 6.5
  * Requires PHP:      7.4
  * Author:            wp-llm-ml contributors
@@ -18,7 +18,8 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'WPLLMML_VERSION', '0.1.0' );
+// Set to the release version in the zip by bin/build-zip.sh.
+define( 'WPLLMML_VERSION', '0.0.0-dev' );
 define( 'WPLLMML_FILE', __FILE__ );
 define( 'WPLLMML_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPLLMML_URL', plugin_dir_url( __FILE__ ) );

@@ -28,8 +28,9 @@ zelf instelt.
 
 ## Installeren
 
-1. Download **`wp-llm-ml.zip`** van de laatste
-   [release](https://github.com/brnl-claude/wp-llm-ml/releases/latest) (onder *Assets*; niet uitpakken).
+1. Download de nieuwste versie:
+   [releases/latest/download/wp-llm-ml.zip](https://github.com/brnl-claude/wp-llm-ml/releases/latest/download/wp-llm-ml.zip)
+   (niet uitpakken).
 2. WordPress → **Plugins → Nieuwe plugin → Plugin uploaden** → zip kiezen → **Nu installeren** → **Activeren**.
    Doe dit eerst op een testsite/staging.
 3. **Instellingen → Languages**:
@@ -73,24 +74,24 @@ tests/package.sh        # bouwt de zip, installeert hem in een verse site en tes
 bin/build-zip.sh        # alleen de zip bouwen → dist/wp-llm-ml.zip
 ```
 
-GitHub Actions draait beide bij elke push (*Tests*; de zip staat dan als artifact bij de run).
-
-### Nieuwe versie uitbrengen
-
-1. `bin/version.sh set 0.2.0` — zet de versie in plugin-header, constante en readme.txt;
-   vul de changelog in `wp-content/plugins/wp-llm-ml/readme.txt` aan en commit/push.
-2. Op GitHub: **Releases → Draft a new release** → *Choose a tag*: typ `v0.2.0` →
-   *Create new tag* → *Target*: de branch met die commit → beschrijving leeg laten → **Publish release**.
-   (Of vanaf de command line: `git tag v0.2.0 && git push origin v0.2.0`.)
-3. De workflow *Release* controleert dat tag en versie gelijk zijn, draait alle tests,
-   bouwt `wp-llm-ml.zip`, hangt die aan de release en vult de release-notes in.
-   Sites met de plugin zien de update daarna in hun dashboard.
-
 Vier suites (153 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
 queries), HTTP (routing, redirects, hreflang, menu's, switcher, links, lijsten, REST, sitemaps) en
 AI (tegen een nep-OpenAI-server: Elementor-teksten, repeaters, Yoast-velden, spellingscontrole, Abilities)
 en package (zip installeren in een verse site, activeren, updaten via de WordPress-upgrader).
 Testversies: WordPress 7.1.4, Elementor 4.2.2, Yoast SEO 28.2, GeneratePress 3.6.1, PHP 8.3.
+
+### Releases
+
+Zoals bij imgcraft: elke push naar `main` wordt getest, gebouwd en als GitHub Release gepubliceerd
+(workflow [`plugin.yml`](.github/workflows/plugin.yml)); pull requests worden alleen getest.
+
+- **Versie** `0.<minor>.<patch>`: *minor* staat in [`version.properties`](version.properties) (verhoog die met
+  de hand voor een grotere stap), *patch* telt de commits op `main` sinds die regel veranderde, dus +1 per
+  release. `bin/version.sh` toont de versie die een build krijgt; `bin/build-zip.sh` zet die in de zip
+  (de bronbestanden houden `0.0.0-dev`).
+- **Release-notes**: de regels die sinds de vorige release in [`CHANGELOG.md`](CHANGELOG.md) zijn
+  bijgekomen (`## datum`, `- regel`). Zet daar dus bij elke wijziging een regel bij.
+- **Updates**: geïnstalleerde sites zien elke nieuwe release onder Dashboard → Updates.
 
 ### Opbouw
 
@@ -112,8 +113,9 @@ wp-content/plugins/wp-llm-ml/
   includes/ai/                  OpenAI-compatibele client, vertaler, spellingscontrole
   includes/admin/               instellingen, kolommen, metabox, adminbalk
   includes/class-updater.php    updates via GitHub Releases
-.github/workflows/              Tests (elke push) en Release (bij tag v*)
-bin/                            build-zip, version, release-notes
+.github/workflows/plugin.yml    tests bij elke PR, release bij elke push naar main
+bin/                            build-zip, version
+version.properties, CHANGELOG.md  versie (minor) en release-notes
 ```
 
 Licentie: GPL-2.0-or-later.
