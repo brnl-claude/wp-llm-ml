@@ -37,6 +37,8 @@ if [ "${WPLLMML_BROWSER:-auto}" != 0 ] && ( cd "$REPO" && node -e "require('play
 	mkdir -p "$WORK/site/wp-content/mu-plugins" && cp "$REPO/tests/fixtures/no-cron.php" "$WORK/site/wp-content/mu-plugins/"
 	node "$REPO/tests/browser/elementor-switcher.js" "http://localhost:$PORT" "$WORK/ids.json" "${WPLLMML_SHOTS:-}" || status=1
 	node "$REPO/tests/browser/bulk-translate.js" "http://localhost:$PORT" "${WPLLMML_SHOTS:-}" || status=1
+	php "$REPO/tests/bin/wp-eval.php" "$WORK/site" "$REPO/tests/fixtures/spell-typo.php" || status=1
+	node "$REPO/tests/browser/spellcheck.js" "http://localhost:$PORT" "${WPLLMML_SHOTS:-}" || status=1
 elif [ "${WPLLMML_BROWSER:-auto}" = 1 ]; then
 	echo "== Browser tests: Playwright not found (npm install playwright)"; status=1
 fi

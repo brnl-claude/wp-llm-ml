@@ -5,6 +5,10 @@ release-notes tonen de regels die sinds de vorige release zijn toegevoegd.
 
 ## 15 november 2026
 
+- Spellingscontrole vanuit het overzicht van Pagina's en Berichten: "Check spelling" onder de titel, of "Check spelling with AI" in het menu van een vertaling (`NL`, `RO`). Er opent een ruim venster met per fout de zin eromheen: de fout doorgestreept, de verbetering ernaast, waar het staat (bijvoorbeeld "Text Editor", "Title" of "Meta description") en een korte uitleg. Per fout kies je "Apply" of "Ignore", of in één keer "Apply all". Er verandert niets tot je op Apply klikt.
+- De knop "Check spelling with AI" op de bewerkpagina gebruikt hetzelfde venster. Na een correctie herlaadt de editor zodra je het venster sluit.
+- De controle loopt op de achtergrond en toont de voortgang, zodat ook een lange pagina geen "504 Gateway Time-out" meer geeft. Sluit je het venster, dan stopt de controle.
+- Een correctie wordt toegepast in het veld waar de fout gevonden is, ook als dezelfde tekst elders op de pagina staat.
 - Meerdere pagina's tegelijk vertalen: vink ze aan in het overzicht van Pagina's of Berichten en kies bij Bulkacties bijvoorbeeld "Translate into Nederlands with AI" of "Translate into all languages with AI". Er lopen twee vertalingen tegelijk, met de voortgang in elke rij en bovenaan de pagina. De vertalingen worden als concept opgeslagen. Talen die al een vertaling hebben, worden overgeslagen. "Cancel all" stopt alles; houd het scherm open tot het klaar is.
 - Met "Create … translation (copy)" maak je in één keer conceptkopieën om zelf te vertalen.
 - Opgelost: na het opslaan van de Engelse pagina bleven NL en RO knipperen en werden ze niet bijgewerkt. Dat gebeurde op servers waar de achtergrondtaken van WordPress (WP-Cron) niet vanzelf draaien. Elementor en het overzicht van Pagina's starten de update nu zelf, en een update die al vastzat gaat verder zodra je een van beide opent.

@@ -26,7 +26,7 @@ zelf instelt.
 | **SEO** | `<html lang>`, `hreflang` + `x-default`, canonical per taal, `og:locale` (+alternates), Yoast schema `inLanguage`, Yoast XML-sitemaps met alle talen én `xhtml:link`-alternates, RSS per taal. Blog, archieven, zoeken en vorige/volgende-links blijven binnen de taal. |
 | **AI-vriendelijk** | Volledig server-gerenderde vertaalde HTML (geen JavaScript-vertaling), REST API met `wpllmml`-veld en `?lang=nl`, `/wp-json/wpllmml/v1/languages`, en WordPress *Abilities* (`wp-llm-ml/list-languages`, `get-translations`, `create-translation`, `translate-text`) voor AI-agents/MCP. |
 | **AI-vertaling (optioneel)** | Via elke OpenAI-compatibele API, standaard [HostYourAI](https://hostyourai.com) (EU). Vertaalt titel, Elementor-teksten (ook repeaters zoals toggles/icon-lists), blokinhoud en Yoast-velden; HTML, links, iconen en namen blijven intact. "Create & translate with AI" of "Translate from English with AI". De hele pagina gaat in één verzoek naar de AI (context blijft behouden) en draait op de server op de achtergrond, dus geen gateway-timeouts; het scherm vraagt elke 2 s de status op. Stopt dat (annuleren, pagina verlaten), dan stopt de server ook en wordt er niets opgeslagen. Eén vertaling per pagina tegelijk. |
-| **Spellingscontrole (optioneel)** | "Spelling controleren met AI" in de editor: lijst met fouten + uitleg, per suggestie "Toepassen". |
+| **Spellingscontrole (optioneel)** | "Check spelling" in het pagina-overzicht (rij-actie en taalmenu) en op de bewerkpagina: een venster met elke fout in zijn zin, de plek (widget/veld), uitleg, en per fout Apply/Ignore of Apply all. Draait op de achtergrond met voortgang. |
 
 ## Installeren
 
@@ -82,12 +82,12 @@ tests/package.sh        # bouwt de zip, installeert hem in een verse site en tes
 bin/build-zip.sh        # alleen de zip bouwen → dist/wp-llm-ml.zip
 ```
 
-Zes suites (304 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
+Zes suites (334 controles): model (vertalingen, Elementor-data byte-voor-byte, slugs, hiërarchie,
 queries), HTTP (routing, redirects, hreflang, menu's, switcher, links, lijsten, REST, sitemaps),
 AI (tegen een nep-OpenAI-server: Elementor-teksten, repeaters, Yoast-velden, spellingscontrole, Abilities),
 sync (layout volgt Engels: nieuw/gewijzigd/verwijderd/verplaatst, lokale verschillen, zonder AI, zonder historie),
 browser (Playwright in de echte Elementor-editor: bovenbalk, wisselen, sync, `+RO` met AI; bulkvertalen
-in het paginaoverzicht; zonder WP-Cron, zoals op servers waar die niet draait; draait als
+in het paginaoverzicht; spellingscontrole-venster; zonder WP-Cron, zoals op servers waar die niet draait; draait als
 Playwright er is, `WPLLMML_BROWSER=1` maakt het verplicht) en package (zip installeren in een verse site,
 activeren, updaten via de WordPress-upgrader).
 Testversies: WordPress 7.1.4, Elementor 4.2.2, Yoast SEO 28.2, GeneratePress 3.6.1, PHP 8.3. Met

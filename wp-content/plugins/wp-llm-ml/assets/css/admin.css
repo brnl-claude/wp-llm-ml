@@ -23,11 +23,6 @@
 .wpllmml-box-list li { margin-bottom: .4em; }
 .wpllmml-status { color: #646970; }
 .wpllmml-unlink { color: #b32d2e; }
-.wpllmml-spell-results ul { margin: .5em 0; }
-.wpllmml-spell-results li { padding: .4em 0; border-bottom: 1px solid #f0f0f1; }
-.wpllmml-spell-results del { color: #b32d2e; }
-.wpllmml-spell-results ins { color: #00450c; text-decoration: none; font-weight: 600; }
-.wpllmml-spell-results .description { display: block; margin: .2em 0; }
 .wpllmml-languages input[readonly] { background: #f6f7f7; }
 .wpllmml-strings td { vertical-align: top; width: 33%; }
 .wpllmml-strings textarea { width: 100%; }
@@ -86,3 +81,41 @@
 .wpllmml-bulk__status { margin: .3em 0; }
 .wpllmml-bulk__item { margin: .4em 0; }
 .wpllmml-bulk > .button { margin: 0 0 .8em; }
+/* Spell check dialog */
+dialog.wpllmml-spell { width: min(880px, calc(100vw - 32px)); max-height: min(86vh, 900px); padding: 0; border: 0; border-radius: 8px; box-shadow: 0 12px 48px rgba(0, 0, 0, .3); color: #1d2327; }
+dialog.wpllmml-spell[open] { display: flex; flex-direction: column; }
+dialog.wpllmml-spell::backdrop { background: rgba(29, 35, 39, .55); }
+.wpllmml-spell__head { display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid #dcdcde; }
+.wpllmml-spell__title { flex: 1; margin: 0; font-size: 18px; line-height: 1.3; }
+.wpllmml-spell__lang { padding: 2px 8px; border-radius: 10px; background: #f0f0f1; font-size: 12px; color: #50575e; }
+.wpllmml-spell__lang:empty { display: none; }
+.wpllmml-spell__x { width: 32px; height: 32px; border: 0; border-radius: 4px; background: none; font-size: 24px; line-height: 1; color: #50575e; cursor: pointer; }
+.wpllmml-spell__x:hover, .wpllmml-spell__x:focus { background: #f0f0f1; color: #1d2327; }
+.wpllmml-spell__body { flex: 1; overflow: auto; padding: 16px 20px; }
+.wpllmml-spell__note { margin: 0 0 12px; padding: 8px 12px; border-left: 4px solid #dba617; background: #fcf9e8; }
+.wpllmml-spell__status { margin: 0 0 12px; font-size: 14px; color: #3c434a; }
+.wpllmml-spell__status.is-busy::before { content: ""; display: inline-block; width: 14px; height: 14px; margin: 0 8px -2px 0; border: 2px solid #c3c4c7; border-top-color: #2271b1; border-radius: 50%; animation: wpllmml-spin .8s linear infinite; }
+.wpllmml-spell__status.is-clean { padding: 24px 0; font-size: 16px; text-align: center; color: #00450c; }
+.wpllmml-spell__status.is-clean::before { content: "✓ "; }
+.wpllmml-spell__status.is-error { color: #b32d2e; }
+@keyframes wpllmml-spin { to { transform: rotate(360deg); } }
+.wpllmml-spell__list { margin: 0; padding: 0; list-style: none; counter-reset: wpllmml-spell; }
+.wpllmml-spell__item { position: relative; margin: 0 0 10px; padding: 12px 14px 12px 44px; border: 1px solid #dcdcde; border-radius: 6px; background: #fff; counter-increment: wpllmml-spell; }
+.wpllmml-spell__item::before { content: counter(wpllmml-spell); position: absolute; top: 12px; left: 12px; width: 22px; height: 22px; border-radius: 50%; background: #f0f0f1; font-size: 12px; font-weight: 600; line-height: 22px; text-align: center; color: #50575e; }
+.wpllmml-spell__where { margin-bottom: 4px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #646970; }
+.wpllmml-spell__context { margin: 0; font-size: 15px; line-height: 1.65; }
+.wpllmml-spell__context del { padding: 1px 2px; border-radius: 3px; background: #fcf0f1; color: #b32d2e; text-decoration-thickness: 2px; }
+.wpllmml-spell__context ins { margin-left: 4px; padding: 1px 3px; border-radius: 3px; background: #edfaef; color: #00450c; font-weight: 600; text-decoration: none; }
+.wpllmml-spell__why { margin: 6px 0 0; color: #50575e; }
+.wpllmml-spell__actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.wpllmml-spell__state { color: #50575e; }
+.wpllmml-spell__item.is-done { background: #f6f7f7; }
+.wpllmml-spell__item.is-applied .wpllmml-spell__state { font-weight: 600; color: #00450c; }
+.wpllmml-spell__item.is-applied del { display: none; }
+.wpllmml-spell__item.is-applied ins { margin-left: 0; }
+.wpllmml-spell__item.is-ignored { opacity: .55; }
+.wpllmml-spell__item.is-missing .wpllmml-spell__state { color: #b32d2e; }
+.wpllmml-spell__foot { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-top: 1px solid #dcdcde; background: #f6f7f7; border-radius: 0 0 8px 8px; }
+.wpllmml-spell__links { flex: 1; }
+.wpllmml-spell [hidden] { display: none !important; }
+.row-actions .wpllmml_spell .button-link { font-size: 13px; vertical-align: baseline; }

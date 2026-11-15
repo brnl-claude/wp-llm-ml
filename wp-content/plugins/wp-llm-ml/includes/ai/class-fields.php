@@ -50,7 +50,7 @@ class Fields {
 	 * Collect texts.
 	 *
 	 * @param int $post_id Post id.
-	 * @return array list of [kind, key, text]
+	 * @return array list of [kind, key, text, widget type (Elementor only)]
 	 */
 	public static function collect( $post_id ) {
 		$post  = get_post( $post_id );
@@ -66,8 +66,8 @@ class Fields {
 			$data = self::elementor_data( $post_id );
 			self::walk(
 				$data,
-				static function ( &$text ) use ( &$items ) {
-					$items[] = array( 'elementor', '', $text );
+				static function ( &$text, $type = '' ) use ( &$items ) {
+					$items[] = array( 'elementor', '', $text, $type );
 				}
 			);
 		} elseif ( '' !== trim( $post->post_content ) ) {
@@ -193,7 +193,7 @@ class Fields {
 	 * Visit every translatable text in Elementor data (by reference).
 	 *
 	 * @param array    $elements Elements (modified in place).
-	 * @param callable $visit    function( string &$text ).
+	 * @param callable $visit    function( string &$text, string $widget_type ).
 	 */
 	public static function walk( array &$elements, callable $visit ) {
 		foreach ( $elements as &$element ) {
@@ -206,19 +206,19 @@ class Fields {
 				foreach ( $element['settings'] as $key => &$value ) {
 					if ( is_string( $value ) && isset( $controls[ $key ] ) && true === $controls[ $key ] ) {
 						if ( self::is_text( $value ) ) {
-							$visit( $value );
+							$visit( $value, $type );
 						}
 					} elseif ( is_array( $value ) && isset( $controls[ $key ] ) && is_array( $controls[ $key ] ) ) {
 						foreach ( $value as &$row ) {
 							foreach ( $controls[ $key ] as $field ) {
 								if ( is_array( $row ) && isset( $row[ $field ] ) && is_string( $row[ $field ] ) && self::is_text( $row[ $field ] ) ) {
-									$visit( $row[ $field ] );
+									$visit( $row[ $field ], $type );
 								}
 							}
 						}
 						unset( $row );
 					} elseif ( is_array( $value ) && isset( $value['$$type'] ) ) {
-						self::walk_atomic( $key, $value, $visit );
+						self::walk_atomic( $key, $value, $visit, $type );
 					}
 				}
 				unset( $value );
@@ -235,15 +235,16 @@ class Fields {
 	 * @param string   $key   Setting key.
 	 * @param array    $prop  Prop value (by reference).
 	 * @param callable $visit Visitor.
+	 * @param string   $type  Widget type.
 	 */
-	private static function walk_atomic( $key, array &$prop, callable $visit ) {
+	private static function walk_atomic( $key, array &$prop, callable $visit, $type = '' ) {
 		if ( in_array( $key, array( 'tag', 'classes', 'link', 'attributes', 'id', '_cssid' ), true ) ) {
 			return;
 		}
 		if ( 'html' === $prop['$$type'] && isset( $prop['value'] ) && is_string( $prop['value'] ) && self::is_text( $prop['value'] ) ) {
-			$visit( $prop['value'] );
+			$visit( $prop['value'], $type );
 		} elseif ( 'html-v3' === $prop['$$type'] && isset( $prop['value']['content']['value'] ) && is_string( $prop['value']['content']['value'] ) && self::is_text( $prop['value']['content']['value'] ) ) {
-			$visit( $prop['value']['content']['value'] );
+			$visit( $prop['value']['content']['value'], $type );
 		}
 	}
 

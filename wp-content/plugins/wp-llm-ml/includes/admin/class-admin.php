@@ -78,7 +78,9 @@ class Admin {
 		add_action( 'admin_post_wpllmml_follow', array( $this, 'handle_follow' ) );
 		add_action( 'admin_post_wpllmml_install_packs', array( $this, 'handle_install_packs' ) );
 		add_action( 'admin_post_wpllmml_ai_strings', array( $this, 'handle_ai_strings' ) );
-		add_action( 'wp_ajax_wpllmml_spellcheck', array( $this, 'ajax_spellcheck' ) );
+		add_action( 'wp_ajax_wpllmml_spell_start', array( $this, 'ajax_spell_start' ) );
+		add_action( 'wp_ajax_wpllmml_spell_status', array( $this, 'ajax_spell_status' ) );
+		add_action( 'wp_ajax_wpllmml_spell_cancel', array( $this, 'ajax_spell_cancel' ) );
 		add_action( 'wp_ajax_wpllmml_apply_fix', array( $this, 'ajax_apply_fix' ) );
 		add_action( 'wp_ajax_wpllmml_models', array( $this, 'ajax_models' ) );
 		add_action( 'wp_ajax_wpllmml_ai_strings_batch', array( $this, 'ajax_ai_strings_batch' ) );
@@ -97,6 +99,7 @@ class Admin {
 				add_filter( "manage_{$type}_posts_columns", array( $this, 'list_column' ) );
 				add_action( "manage_{$type}_posts_custom_column", array( $this, 'list_column_content' ), 10, 2 );
 				add_filter( "bulk_actions-edit-{$type}", array( $this, 'bulk_actions' ) );
+				add_filter( is_post_type_hierarchical( $type ) ? 'page_row_actions' : 'post_row_actions', array( $this, 'row_actions' ), 10, 2 );
 				add_filter( "handle_bulk_actions-edit-{$type}", array( $this, 'handle_bulk_action' ), 10, 3 );
 			}
 		}
@@ -286,7 +289,24 @@ class Admin {
 				'nonce' => wp_create_nonce( 'wpllmml_ajax' ),
 				'i18n'  => array(
 					'checking'     => __( 'Checking…', 'wp-llm-ml' ),
-					'noErrors'     => __( 'No errors found.', 'wp-llm-ml' ),
+					/* translators: %1$s: page title */
+					'spellTitle'   => __( 'Spelling and grammar: %1$s', 'wp-llm-ml' ),
+					'spellStart'   => __( 'Starting the check…', 'wp-llm-ml' ),
+					/* translators: 1: number of texts, 2: elapsed time */
+					'spellRunning' => __( 'Checking %1$s texts with AI… %2$s', 'wp-llm-ml' ),
+					/* translators: 1: number of texts, 2: elapsed time, 3: part done, 4: parts */
+					'spellParts'   => __( 'Checking %1$s texts with AI… %2$s (part %3$s of %4$s)', 'wp-llm-ml' ),
+					/* translators: %1$s: number of texts */
+					'spellNone'    => __( 'No spelling or grammar errors found in %1$s texts.', 'wp-llm-ml' ),
+					/* translators: %1$s: number of suggestions */
+					'spellFound'   => __( '%1$s suggestions. Check each one in its sentence; nothing is changed until you click Apply.', 'wp-llm-ml' ),
+					'spellOne'     => __( '1 suggestion. Check it in its sentence; nothing is changed until you click Apply.', 'wp-llm-ml' ),
+					'applyAll'     => __( 'Apply all', 'wp-llm-ml' ),
+					'ignore'       => __( 'Ignore', 'wp-llm-ml' ),
+					'ignored'      => __( 'Ignored', 'wp-llm-ml' ),
+					'close'        => __( 'Close', 'wp-llm-ml' ),
+					'reload'       => __( 'Reload the editor to see the changes', 'wp-llm-ml' ),
+					'view'         => __( 'View page', 'wp-llm-ml' ),
 					'apply'        => __( 'Apply', 'wp-llm-ml' ),
 					'applied'      => __( 'Applied', 'wp-llm-ml' ),
 					'notFound'     => __( 'Text not found (already changed?)', 'wp-llm-ml' ),
@@ -1025,6 +1045,9 @@ class Admin {
 						esc_html( sprintf( __( 'Translate again from %s with AI', 'wp-llm-ml' ), $default_name ) )
 					);
 				}
+				if ( $ai && current_user_can( 'edit_post', $tid ) ) {
+					$items[] = sprintf( '<button type="button" class="wpllmml-spell-open" data-post="%1$d">%2$s</button>', $tid, esc_html__( 'Check spelling with AI', 'wp-llm-ml' ) );
+				}
 				$syncing = false;
 				$failed  = false;
 				if ( $own === Languages::default_code() && Fields::is_elementor( $post_id ) && Fields::is_elementor( $tid ) && current_user_can( 'edit_post', $tid ) ) {
@@ -1123,6 +1146,24 @@ class Admin {
 			esc_html( $label ),
 			implode( '', $items ) // phpcs:ignore WordPress.Security.EscapeOutput -- escaped above.
 		);
+	}
+
+	/**
+	 * Row action "Check spelling" (opens the spell check dialog).
+	 *
+	 * @param array    $actions Row actions.
+	 * @param \WP_Post $post    Post.
+	 * @return array
+	 */
+	public function row_actions( $actions, $post ) {
+		if ( Translations::is_translatable_type( $post->post_type ) && 'trash' !== $post->post_status && Client::is_configured() && current_user_can( 'edit_post', $post->ID ) ) {
+			$actions['wpllmml_spell'] = sprintf(
+				'<button type="button" class="button-link wpllmml-spell-open" data-post="%1$d">%2$s</button>',
+				(int) $post->ID,
+				esc_html__( 'Check spelling', 'wp-llm-ml' )
+			);
+		}
+		return $actions;
 	}
 
 	/**
@@ -1378,7 +1419,7 @@ class Admin {
 				);
 			}
 			printf(
-				'<p><button type="button" class="button wpllmml-spellcheck" data-post="%1$d">%2$s</button></p><div class="wpllmml-spell-results" aria-live="polite"></div>',
+				'<p><button type="button" class="button wpllmml-spell-open" data-post="%1$d" data-editor="1">%2$s</button></p>',
 				(int) $post->ID,
 				esc_html__( 'Check spelling with AI', 'wp-llm-ml' )
 			);
@@ -1557,19 +1598,58 @@ class Admin {
 	 * ------------------------------------------------------------------ */
 
 	/**
-	 * Spell check a post.
+	 * Spell check, step 1: answer the browser at once, then check the post in
+	 * this same request (several AI requests for a long page).
 	 */
-	public function ajax_spellcheck() {
+	public function ajax_spell_start() {
 		check_ajax_referer( 'wpllmml_ajax' );
 		$post_id = isset( $_POST['post'] ) ? absint( $_POST['post'] ) : 0;
+		if ( ! get_post( $post_id ) || ! current_user_can( 'edit_post', $post_id ) ) {
+			wp_send_json_error( __( 'You are not allowed to do this.', 'wp-llm-ml' ), 403 );
+		}
+		if ( ! Client::is_configured() ) {
+			wp_send_json_error( __( 'The AI provider is not configured (API key and model are required).', 'wp-llm-ml' ) );
+		}
+		$lang  = Languages::get( Translations::get_lang( $post_id ) );
+		$token = Spellcheck::start( $post_id );
+		self::respond_and_continue(
+			array(
+				'token'    => $token,
+				'title'    => html_entity_decode( get_the_title( $post_id ), ENT_QUOTES, 'UTF-8' ),
+				'language' => $lang ? $lang['name'] : '',
+				'editor'   => self::editor_url( $post_id ),
+				'view'     => 'publish' === get_post_status( $post_id ) ? (string) get_permalink( $post_id ) : (string) get_preview_post_link( $post_id ),
+			)
+		);
+		( new Spellcheck() )->run( $post_id, $token );
+		exit;
+	}
+
+	/**
+	 * Spell check, step 2 (repeated): progress, then the findings.
+	 */
+	public function ajax_spell_status() {
+		check_ajax_referer( 'wpllmml_ajax' );
+		$post_id = isset( $_POST['post'] ) ? absint( $_POST['post'] ) : 0;
+		$token   = isset( $_POST['token'] ) ? sanitize_text_field( wp_unslash( $_POST['token'] ) ) : '';
 		if ( ! current_user_can( 'edit_post', $post_id ) ) {
 			wp_send_json_error( __( 'You are not allowed to do this.', 'wp-llm-ml' ), 403 );
 		}
-		$result = ( new Spellcheck() )->check_post( $post_id );
-		if ( is_wp_error( $result ) ) {
-			wp_send_json_error( $result->get_error_message() );
+		wp_send_json_success( Spellcheck::status( $post_id, $token ) );
+	}
+
+	/**
+	 * Stop a spell check (the dialog was closed).
+	 */
+	public function ajax_spell_cancel() {
+		check_ajax_referer( 'wpllmml_ajax' );
+		$post_id = isset( $_POST['post'] ) ? absint( $_POST['post'] ) : 0;
+		$token   = isset( $_POST['token'] ) ? sanitize_text_field( wp_unslash( $_POST['token'] ) ) : '';
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			wp_send_json_error( __( 'You are not allowed to do this.', 'wp-llm-ml' ), 403 );
 		}
-		wp_send_json_success( $result );
+		Spellcheck::cancel( $post_id, $token );
+		wp_send_json_success( array( 'cancelled' => true ) );
 	}
 
 	/**
@@ -1586,7 +1666,8 @@ class Admin {
 		if ( ! current_user_can( 'unfiltered_html' ) ) {
 			$suggestion = wp_kses_post( $suggestion );
 		}
-		$result = ( new Spellcheck() )->apply( $post_id, $original, $suggestion );
+		$field  = isset( $_POST['field'] ) && '' !== $_POST['field'] ? absint( $_POST['field'] ) : null;
+		$result = ( new Spellcheck() )->apply( $post_id, $original, $suggestion, $field );
 		if ( is_wp_error( $result ) ) {
 			wp_send_json_error( $result->get_error_message() );
 		}
